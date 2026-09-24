@@ -3702,13 +3702,6 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/analysistemplates.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -7284,13 +7277,6 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/applications.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -14405,13 +14391,6 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/applicationsets.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -37752,13 +37731,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/appprojects.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -38195,13 +38167,6 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/argocdcommitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -38522,13 +38487,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/argocds.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -63191,13 +63149,6 @@ spec:
       storage: true
       subresources:
         status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/changetransferpolicies.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -64552,13 +64503,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/clusteranalysistemplates.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -68134,13 +68078,6 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/clusterscmproviders.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -68402,13 +68339,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/commitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -68637,13 +68567,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/controllerconfigurations.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -70718,13 +70641,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/experiments.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -73952,13 +73868,6 @@ spec:
     served: true
     storage: true
     subresources: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/gitcommitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -74291,13 +74200,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/gitrepositories.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -74597,13 +74499,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/imageupdaters.argocd-image-updater.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -75377,13 +75272,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/namespacemanagements.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -75500,13 +75388,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/notificationsconfigurations.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -75589,13 +75470,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/promotionstrategies.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -77094,13 +76968,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/pullrequests.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -77412,13 +77279,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/revertcommits.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -77475,13 +77335,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/rolloutmanagers.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -77963,13 +77816,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/rollouts.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -82268,13 +82114,6 @@ spec:
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.HPAReplicas
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/scheduledcommitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -82729,13 +82568,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/scmproviders.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -82996,13 +82828,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/timedcommitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -83245,13 +83070,6 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
 ---
 # Source: openshift-gitops-operator-crds/crds/webrequestcommitstatuses.promoter.argoproj.io.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -84110,9 +83928,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

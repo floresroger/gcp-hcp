@@ -728,8 +728,6 @@ spec:
     targetPort: 443
   selector:
     control-plane: gitops-operator
-status:
-  loadBalancer: {}
 ---
 apiVersion: v1
 kind: Service
@@ -755,8 +753,6 @@ spec:
   selector:
     control-plane: gitops-operator
   type: ClusterIP
-status:
-  loadBalancer: {}
 ---
 apiVersion: v1
 kind: Service
@@ -777,8 +773,6 @@ spec:
     targetPort: 9443
   selector:
     control-plane: gitops-operator
-status:
-  loadBalancer: {}
 ---
 apiVersion: apps/v1
 kind: Deployment
