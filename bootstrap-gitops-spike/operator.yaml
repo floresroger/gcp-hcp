@@ -1,0 +1,903 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitops-operator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-prometheus
+  namespace: gitops-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - endpoints
+  - events
+  - namespaces
+  - persistentvolumeclaims
+  - pods
+  - secrets
+  - serviceaccounts
+  - services
+  - services/finalizers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - deployments
+  - podtemplates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/eviction
+  - serviceaccounts/token
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiregistration.k8s.io
+  resources:
+  - apiservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - appmesh.k8s.aws
+  resources:
+  - virtualnodes
+  - virtualrouters
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - appmesh.k8s.aws
+  resources:
+  - virtualservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - podtemplates
+  - replicasets
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - apps
+  resourceNames:
+  - gitops-operator
+  resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - apps.openshift.io
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - analysisruns
+  - analysisruns/finalizers
+  - analysistemplates
+  - clusteranalysistemplates
+  - experiments
+  - experiments/finalizers
+  - namespacemanagements
+  - namespacemanagements/status
+  - rollouts
+  - rollouts/finalizers
+  - rollouts/scale
+  - rollouts/status
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  - appprojects
+  - argocds
+  - argocds/finalizers
+  - argocds/status
+  - rolloutmanagers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - notificationsconfigurations
+  - notificationsconfigurations/finalizers
+  verbs:
+  - '*'
+- apiGroups:
+  - argoproj.io
+  resources:
+  - rolloutmanagers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - argoproj.io
+  resources:
+  - rolloutmanagers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  - authentications
+  - clusterversions
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - console.openshift.io
+  resources:
+  - consoleclidownloads
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - console.openshift.io
+  resources:
+  - consolelinks
+  - consoleplugins
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - update
+- apiGroups:
+  - eks.amazonaws.com
+  - elbv2.k8s.aws
+  resources:
+  - targetgroupbindings
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - getambassador.io
+  - x.getambassador.io
+  resources:
+  - ambassadormappings
+  - mappings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheuses
+  - prometheusrules
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - virtualservices
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - oauth.openshift.io
+  resources:
+  - oauthclients
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.coreos.com
+  resources:
+  - clusterserviceversions
+  - operatorgroups
+  - subscriptions
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - pipelines.openshift.io
+  resources:
+  - '*'
+  - gitopsservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - pipelines.openshift.io
+  resources:
+  - gitopsservices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - pipelines.openshift.io
+  resources:
+  - gitopsservices/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - promoter.argoproj.io
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - promoter.argoproj.io
+  resources:
+  - controllerconfigurations
+  - controllerconfigurations/finalizers
+  - controllerconfigurations/status
+  verbs:
+  - '*'
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - '*'
+  - clusterrolebindings
+  - clusterroles
+  verbs:
+  - bind
+  - create
+  - delete
+  - deletecollection
+  - escalate
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - '*'
+  - routes
+  - routes/custom-host
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - split.smi-spec.io
+  resources:
+  - trafficsplits
+  verbs:
+  - create
+  - get
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - template.openshift.io
+  resources:
+  - templateconfigs
+  - templateinstances
+  - templates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - traefik.containo.us
+  resources:
+  - traefikservices
+  verbs:
+  - get
+  - update
+  - watch
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-prometheus
+  namespace: gitops-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openshift-gitops-operator-prometheus
+subjects:
+- kind: ServiceAccount
+  name: openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+subjects:
+- kind: ServiceAccount
+  name: openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openshift-gitops-operator.v1.22.0-openshift-gitops-operator-controller-manager
+subjects:
+- kind: ServiceAccount
+  name: openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
+    kind: ControllerManagerConfig
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: 127.0.0.1:8080
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: 2b63967d.openshift.io
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-manager-config
+  namespace: gitops-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    openshift.io/description: This ConfigMap is used for Prometheus monitoring of
+      the GitOps Operator.
+    openshift.io/display-name: GitOps Operator Prometheus Monitor ConfigMap
+    openshift.io/owning-component: service-ca
+    service.beta.openshift.io/inject-cabundle: "true"
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-metrics-monitor-ca-bundle
+  namespace: gitops-operator
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    kubernetes.io/service-account.name: openshift-gitops-operator-controller-manager
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-metrics-monitor-bearer-token
+  namespace: gitops-operator
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-controller-manager-webhook-service
+  namespace: gitops-operator
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    control-plane: gitops-operator
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: openshift-gitops-operator-metrics-tls
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    control-plane: gitops-operator
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-metrics-service
+  namespace: gitops-operator
+spec:
+  ports:
+  - name: metrics
+    port: 8443
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    control-plane: gitops-operator
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-webhook-service
+  namespace: gitops-operator
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 9443
+  selector:
+    control-plane: gitops-operator
+status:
+  loadBalancer: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: gitops-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: openshift-gitops-operator-chart
+    app.kubernetes.io/version: 1.22.0
+    helm.sh/chart: openshift-gitops-operator-chart-1.22.0
+  name: openshift-gitops-operator-controller-manager
+  namespace: gitops-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: gitops-operator
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: gitops-operator
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/manager
+        env:
+        - name: ARGOCD_CLUSTER_CONFIG_NAMESPACES
+          value: argocd
+        - name: CLUSTER_SCOPED_ARGO_ROLLOUTS_NAMESPACES
+          value: openshift-gitops
+        - name: OPERATOR_NAME
+          value: gitops-operator
+        - name: LABEL_SELECTOR
+          value: ""
+        - name: DISABLE_CLUSTER_TLS_PROFILE
+          value: "false"
+        - name: ENABLE_CONVERSION_WEBHOOK
+          value: "false"
+        - name: RELATED_IMAGE_ARGOCD_DEX_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/dex-rhel9@sha256:a8bb0f4ad645b21a21f78e03bbd7d53b4c6abf4e7062d246c0bfbf741d42fa9a
+        - name: ARGOCD_DEX_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/dex-rhel9@sha256:a8bb0f4ad645b21a21f78e03bbd7d53b4c6abf4e7062d246c0bfbf741d42fa9a
+        - name: RELATED_IMAGE_BACKEND_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-rhel9@sha256:df537c3238d29268bd731ea48f738a8f54c554a9764c1813c2e92e5bba37a2fc
+        - name: BACKEND_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-rhel9@sha256:df537c3238d29268bd731ea48f738a8f54c554a9764c1813c2e92e5bba37a2fc
+        - name: RELATED_IMAGE_ARGOCD_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-rhel9@sha256:ec4e9bd577efa235da258f1ea0ab95b7207ac52cca92be6b5437f87dc243eeb2
+        - name: ARGOCD_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-rhel9@sha256:ec4e9bd577efa235da258f1ea0ab95b7207ac52cca92be6b5437f87dc243eeb2
+        - name: ARGOCD_REPOSERVER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-rhel9@sha256:ec4e9bd577efa235da258f1ea0ab95b7207ac52cca92be6b5437f87dc243eeb2
+        - name: RELATED_IMAGE_ARGOCD_REDIS_IMAGE
+          value: registry.redhat.io/rhel9/redis-7@sha256:c2a41f68ea2d364eec550358f0673fb6cfef8debc0d00f0369f122d1e15227bf
+        - name: ARGOCD_REDIS_IMAGE
+          value: registry.redhat.io/rhel9/redis-7@sha256:c2a41f68ea2d364eec550358f0673fb6cfef8debc0d00f0369f122d1e15227bf
+        - name: ARGOCD_REDIS_HA_IMAGE
+          value: registry.redhat.io/rhel9/redis-7@sha256:c2a41f68ea2d364eec550358f0673fb6cfef8debc0d00f0369f122d1e15227bf
+        - name: RELATED_IMAGE_ARGOCD_REDIS_HA_PROXY_IMAGE
+          value: registry.redhat.io/openshift4/ose-haproxy-router-rhel9@sha256:5901b32a9b1c6d3f3f513030cd932d932a919d9ab4bf8aea60f1c907a38b4446
+        - name: ARGOCD_REDIS_HA_PROXY_IMAGE
+          value: registry.redhat.io/openshift4/ose-haproxy-router-rhel9@sha256:5901b32a9b1c6d3f3f513030cd932d932a919d9ab4bf8aea60f1c907a38b4446
+        - name: RELATED_IMAGE_GITOPS_CONSOLE_PLUGIN_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/console-plugin-rhel9@sha256:c9b0b06cb58aa5dd0e8960263e815e6c78048a315c79739def313c0052fe60e9
+        - name: GITOPS_CONSOLE_PLUGIN_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/console-plugin-rhel9@sha256:c9b0b06cb58aa5dd0e8960263e815e6c78048a315c79739def313c0052fe60e9
+        - name: RELATED_IMAGE_GITOPS_CONSOLE_PLUGIN_4_18_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/console-plugin-4-18-rhel9@sha256:1f8b51ab5e8ec2a95e64f8acb7d0cd064e2ea8b262f81f001884e5784b6f5f3b
+        - name: GITOPS_CONSOLE_PLUGIN_4_18_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/console-plugin-4-18-rhel9@sha256:1f8b51ab5e8ec2a95e64f8acb7d0cd064e2ea8b262f81f001884e5784b6f5f3b
+        - name: RELATED_IMAGE_ARGOCD_EXTENSION_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-extensions-rhel9@sha256:0d9acced782b771c54b39bddba152bb151ca9df59d1070414952c6e2de3258fe
+        - name: ARGOCD_EXTENSION_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-extensions-rhel9@sha256:0d9acced782b771c54b39bddba152bb151ca9df59d1070414952c6e2de3258fe
+        - name: RELATED_IMAGE_ARGO_ROLLOUTS_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argo-rollouts-rhel9@sha256:7bcbddb7a1e48219fe20ca0d0ce5929b62bf765715375ebb6bda6e8d2a80aa6b
+        - name: ARGO_ROLLOUTS_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argo-rollouts-rhel9@sha256:7bcbddb7a1e48219fe20ca0d0ce5929b62bf765715375ebb6bda6e8d2a80aa6b
+        - name: RELATED_IMAGE_MUST_GATHER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/must-gather-rhel9@sha256:16f7d69f35fa3350b56e4fb149c6b7cd344acc1c19e77797ac63a55d258425aa
+        - name: ARGOCD_PRINCIPAL_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-agent-rhel9@sha256:67ce6105d3a76ec184ea7623d0a3c478c343ccad738b51e47383fc8657061cb9
+        - name: RELATED_IMAGE_ARGOCD_PRINCIPAL_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-agent-rhel9@sha256:67ce6105d3a76ec184ea7623d0a3c478c343ccad738b51e47383fc8657061cb9
+        - name: ARGOCD_AGENT_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-agent-rhel9@sha256:67ce6105d3a76ec184ea7623d0a3c478c343ccad738b51e47383fc8657061cb9
+        - name: RELATED_IMAGE_ARGOCD_AGENT_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-agent-rhel9@sha256:67ce6105d3a76ec184ea7623d0a3c478c343ccad738b51e47383fc8657061cb9
+        - name: ARGOCD_IMAGE_UPDATER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-image-updater-rhel9@sha256:c068cdda7527ff0341407d1bb117678953cc736d3bedf6abd605fe5482ccd4df
+        - name: RELATED_IMAGE_ARGOCD_IMAGE_UPDATER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-image-updater-rhel9@sha256:c068cdda7527ff0341407d1bb117678953cc736d3bedf6abd605fe5482ccd4df
+        - name: RELATED_IMAGE_ARGOCD_PROMOTER_EXTENSION_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-promoter-extension-rhel9@sha256:29b3fae477ac5b880a026f755b4678ae94508457e08ba9ffa24bc39db6351e62
+        - name: ARGOCD_PROMOTER_EXTENSION_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/argocd-promoter-extension-rhel9@sha256:29b3fae477ac5b880a026f755b4678ae94508457e08ba9ffa24bc39db6351e62
+        - name: RELATED_IMAGE_GITOPS_PROMOTER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-promoter-rhel9@sha256:b4b31b145eb1e661e5d9f63d0ea292e55f38a5c62c85700a34c8e0cd6905e666
+        - name: GITOPS_PROMOTER_IMAGE
+          value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-promoter-rhel9@sha256:b4b31b145eb1e661e5d9f63d0ea292e55f38a5c62c85700a34c8e0cd6905e666
+        - name: WATCH_NAMESPACE
+          value: ""
+        image: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-rhel9-operator@sha256:8afeee5e1c0e8c0684c119d4106de6c5bf97a8bc2e585d103b049d16ebb6c07f
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        volumeMounts: null
+      imagePullSecrets:
+      - name: redhat-registry-pull-secret
+      serviceAccountName: openshift-gitops-operator-controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes: null

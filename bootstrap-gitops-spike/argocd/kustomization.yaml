@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - namespace.yaml
+  - service-account.yaml
+  - secret-store.yaml
+  - cluster-metadata-annotations-template.yaml
+  - external-secret-argocd-cluster.yaml
+  - external-secret-git-credentials.yaml
+  - root-applicationset.yaml
+  # Existing Dex-at-startup seed; field ownership needs live validation.
+  - argocd-cm-patch.yaml
+patches:
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        annotations:
+          client.lifecycle.config.k8s.io/mutation: ignore

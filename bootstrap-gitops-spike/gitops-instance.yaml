@@ -1,0 +1,26 @@
+# Phase 4 disposable MC candidate, NOT applied. Instance name is a PoC choice,
+# not the final product name. Keep namespace/root ApplicationSet/metadata Secret.
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: gitops
+  namespace: argocd
+spec:
+  applicationSet:
+    enabled: true
+  notifications:
+    enabled: true
+  # Replicates the existing bootstrap Dex auth-proxy connector. Operator
+  # reconciliation on GKE is tested separately; actual IAP login is not.
+  sso:
+    provider: dex
+    dex:
+      config: |
+        connectors:
+          - type: authproxy
+            id: iap
+            name: Google Cloud IAP
+            config:
+              userHeader: X-Goog-Authenticated-User-Email
+              allowedDomains:
+                - redhat.com
