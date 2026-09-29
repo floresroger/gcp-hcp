@@ -877,7 +877,7 @@ spec:
           value: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-promoter-rhel9@sha256:b4b31b145eb1e661e5d9f63d0ea292e55f38a5c62c85700a34c8e0cd6905e666
         - name: WATCH_NAMESPACE
           value: ""
-        image: quay.io/redhat-user-workloads/rh-openshift-gitops-tenant/gitops-rhel9-operator@sha256:8afeee5e1c0e8c0684c119d4106de6c5bf97a8bc2e585d103b049d16ebb6c07f
+        image: quay.io/rfloresj/gitops-operator@sha256:3063cf8d315d431700f3c084dae4f7b2c512a32d2438a7c2dbab9d959030a8a7
         name: manager
         ports:
         - containerPort: 9443
