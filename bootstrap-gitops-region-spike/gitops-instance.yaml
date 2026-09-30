@@ -1,0 +1,24 @@
+# Disposable region replacement candidate. Instance name follows the MC PoC to
+# avoid colliding with ESO's argocd-cluster metadata Secret; no rollout approved.
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: gitops
+  namespace: argocd
+spec:
+  applicationSet:
+    enabled: true
+  notifications:
+    enabled: true
+  sso:
+    provider: dex
+    dex:
+      config: |
+        connectors:
+          - type: authproxy
+            id: iap
+            name: Google Cloud IAP
+            config:
+              userHeader: X-Goog-Authenticated-User-Email
+              allowedDomains:
+                - redhat.com
