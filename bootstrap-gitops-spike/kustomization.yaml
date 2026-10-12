@@ -9,4 +9,4 @@ resources:
 - gitops-instance.yaml
 - controller-rbac.yaml
 components:
-- components/argocd-config-handoff
+- components/argocd-config-release

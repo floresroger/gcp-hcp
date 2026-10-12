@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Use only after the handoff protection was observed on-cluster.
+# This is an ownership transfer, not a permanent drift-suppression workaround.
+patches:
+  - target:
+      group: argoproj.io
+      kind: ArgoCD
+      name: gitops
+      namespace: argocd
+    patch: |-
+      apiVersion: argoproj.io/v1beta1
+      kind: ArgoCD
+      metadata:
+        name: gitops
+        annotations:
+          client.lifecycle.config.k8s.io/deletion: detach
+          configmanagement.gke.io/managed: disabled
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+      namespace: argocd
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+        annotations:
+          client.lifecycle.config.k8s.io/deletion: detach
+          configmanagement.gke.io/managed: disabled
