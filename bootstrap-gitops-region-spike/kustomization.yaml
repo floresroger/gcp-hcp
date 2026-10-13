@@ -6,7 +6,4 @@ resources:
 - crds.yaml
 - operator.yaml
 - pull-secret.yaml
-- gitops-instance.yaml
 - controller-rbac.yaml
-components:
-- components/argocd-config-release
