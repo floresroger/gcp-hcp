@@ -17,11 +17,8 @@ spec:
   template:
     metadata:
       name: 'root-app-{{ .name }}'
-      annotations:
-        # GCP-840: subscribe to ArgoCD Notifications GitHub triggers (configured in argocd-notifications-cm)
-        notifications.argoproj.io/subscribe.on-pending.github: ""
-        notifications.argoproj.io/subscribe.on-deployed.github: ""
-        notifications.argoproj.io/subscribe.on-failed.github: ""
+      # GCP-1284 dev fixture isolation: the root reads a personal fork outside
+      # the private notification App's installation. Subscribe the fixture only.
       labels:
         app.kubernetes.io/name: root-app
         app.kubernetes.io/instance: '{{ .name }}'
