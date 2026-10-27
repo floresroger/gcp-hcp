@@ -8,4 +8,5 @@ resources:
 - cluster-metadata-annotations-template.yaml
 - external-secret-argocd-cluster.yaml
 - external-secret-git-credentials.yaml
+- external-secret-gcp1284-fixture-git-credentials.yaml
 - root-applicationset.yaml
