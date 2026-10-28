@@ -27,7 +27,7 @@ spec:
       project: default
       source:
         repoURL: '{{ index .metadata.annotations "meta_git_repo" }}'
-        targetRevision: '{{ index .metadata.annotations "meta_git_revision" }}'
+        targetRevision: 'e55c458cc8b142cc7d7d6a570afefb5303d71a31'
         # Path computed by Terraform and stored in cluster secret annotations
         path: '{{ index .metadata.annotations "meta_argocd_path" }}'
         helm:
