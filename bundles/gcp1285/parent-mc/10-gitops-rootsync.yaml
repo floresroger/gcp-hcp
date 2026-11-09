@@ -1,0 +1,13 @@
+apiVersion: configsync.gke.io/v1beta1
+kind: RootSync
+metadata:
+  name: gitops-workload
+  namespace: config-management-system
+spec:
+  sourceFormat: unstructured
+  sourceType: git
+  git:
+    repo: https://github.com/floresroger/gcp-hcp.git
+    revision: 12673ed7208272954963cc5c029915b187e4ca63
+    dir: bundles/gcp1280/dev/rflores-gcp1280/northamerica-northeast2/mc
+    auth: none
