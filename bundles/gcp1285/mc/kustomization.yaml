@@ -8,7 +8,6 @@ resources:
   - operator.yaml
   - registry.yaml
   - networkpolicy.yaml
-  - controller-rbac.yaml
 patches:
   # ControllerConfiguration is a required dependency API: the operator's
   # ArgoCD reconcile reads it even with Promoter disabled. It is declared by
