@@ -548,5 +548,18 @@ rendered_mixed_case_host_image="$(
 assert_eq "mixed-case host image reference round-trips exactly" "$MIXED_CASE_HOST_IMAGE" "$rendered_mixed_case_host_image"
 
 echo
+OUT_ROLE="$TMP_DIR/controller-role"
+if run_render --pins "$TMP_DIR/good-pins.yaml" --output-dir "$OUT_ROLE" "${COMMON_ARGS[@]}" --controller-cluster-role gitops-hcp-controller-local >"$TMP_DIR/controller-role.log" 2>&1; then
+  ok "reviewed controller role renders"
+else
+  bad "reviewed controller role renders"
+  cat "$TMP_DIR/controller-role.log" >&2
+fi
+rendered_role="$(yq eval -o=json -I=0 '.' "$OUT_ROLE/operator.yaml" | jq -sr '[.[] | select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .env[] | select(.name == "CONTROLLER_CLUSTER_ROLE") | .value] | join(",")')"
+assert_eq "controller role is bound to the manager env" "gitops-hcp-controller-local" "$rendered_role"
+default_role_count="$(yq eval -o=json -I=0 '.' "$OUT1/operator.yaml" | jq -s '[.[] | select(.kind == "Deployment") | .spec.template.spec.containers[] | .env[] | select(.name == "CONTROLLER_CLUSTER_ROLE")] | length')"
+assert_eq "default output adds no controller role override" "0" "$default_role_count"
+expect_failure "invalid controller role fails closed" "invalid --controller-cluster-role" "$TMP_DIR/bad-controller-role.log" --pins "$TMP_DIR/good-pins.yaml" --output-dir "$TMP_DIR/bad-controller-role" "${COMMON_ARGS[@]}" --controller-cluster-role bad/role
+
 echo "gitops-bootstrap offline checks: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
