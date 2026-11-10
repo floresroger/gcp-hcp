@@ -222,6 +222,34 @@ fails closed rather than silently producing unreviewed output):
 - All namespaced operator objects are explicitly scoped to `--namespace`;
   `ClusterRole`/`ClusterRoleBinding` must not declare a namespace.
 
+## Release validation (GCP-1286)
+
+`release-matrix.yaml` records the OpenShift GitOps release selected for
+bounded validation, its provenance, trust results, and the required,
+conditional, and excluded component images. `support.approval` stays
+`pending` until GitOps engineering/QE supplies the GKE scope (B1) and the
+installation and trust decisions are recorded (B2/B3); the operator-wide CSV
+RBAC exception needs its own owner/risk review (B4) before activation.
+
+`verify-release.sh` is the single artifact verification entry point:
+
+```sh
+./verify-release.sh --matrix release-matrix.yaml --image NAME \
+  --authfile FILE --key-file FILE --workdir DIR [--arch amd64]
+```
+
+It copies the approved digest under an isolated, fail-closed containers/image
+policy and then checks the saved manifest digest, media type, and selected
+platform child against the matrix. `--layout-dir DIR` re-checks an existing
+copy without a registry. It refuses excluded components, unknown images,
+unadvertised architectures, non-digest references, a permissive policy, and any
+digest/platform mismatch. It does not print credentials, does not offer an
+insecure option, and does not establish GKE support or runtime behavior.
+
+The supporting manifests, detached signatures, key, and logs from the review
+are retained in the infra repository at `docs/gcp-1286-evidence/`; refresh that
+evidence against registry.redhat.io before relying on it.
+
 ## Offline checks
 
 ```sh
@@ -266,6 +294,11 @@ alongside malformed dot placement — leading dot, trailing dot, double dot,
 and uppercase (negative).
 
 Contacts no network and no cluster.
+
+`tests/run-release-verification-tests.sh` (invoked by `run-tests.sh`) exercises
+the GCP-1286 entry point with synthetic fixtures: fail-closed policy rejection,
+wrong platform digest, unadvertised architecture, tampered manifest, missing
+platform child, excluded/unknown image and a missing auth file.
 
 ## Controller namespace role (GCP-1285)
 

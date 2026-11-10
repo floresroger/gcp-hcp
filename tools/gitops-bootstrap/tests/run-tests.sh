@@ -590,5 +590,8 @@ else
   cat "$TMP_DIR/numeric-namespace.log" >&2
 fi
 
+# GCP-1286 release verification entry point (offline fixtures only).
+"$TESTS_DIR/run-release-verification-tests.sh"
+
 echo "gitops-bootstrap offline checks: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

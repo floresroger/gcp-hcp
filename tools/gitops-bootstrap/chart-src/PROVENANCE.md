@@ -255,6 +255,42 @@ valid annotation syntax alone does not prove safe second-sync behavior. The
 `depends-on` token syntax comes from the Config Sync v1.23.3 vendored
 `pkg/object/dependson` (`strings.go`).
 
+## Release validation status (GCP-1286)
+
+Selected candidate: **OpenShift GitOps 1.22.2-7**, bundle
+`registry.redhat.io/openshift-gitops-1/gitops-operator-bundle@sha256:2ba58c50f771c08bbc5a1d8572c7b058df55bc71667cc66026d42840eb4bee6d`,
+per [RHBA-2026:83602](https://access.redhat.com/errata/RHBA-2026:83602)
+(2026-10-15). The release contains the Route/Scheme fix
+([GITOPS-11466](https://redhat.atlassian.net/browse/GITOPS-11466), operator
+PR [#1321](https://github.com/redhat-developer/gitops-operator/pull/1321),
+release backport [#1354](https://github.com/redhat-developer/gitops-operator/pull/1354));
+the released operator source `cf327714…` is one commit ahead of that backport.
+
+Trust evidence from the review: the bundle manifest and all 15 distinct
+related-image index manifests matched their digests and passed GPG simple
+signing with Red Hat release key 2 (`567E347AD0044ADE55BA8A5F199E2F91FD431D51`);
+the bundle also passed a full `skopeo copy` under a `reject`-default policy with
+`matchRepoDigestOrExact`; a tampered manifest was rejected. Limits: platform
+child manifests/layers were not independently fetched, release-key-3 Sigstore
+signatures were not tested, and the charts here have no vendor signature.
+Manifests, signatures, key and logs are retained in
+`gcp-hcp-infra/docs/gcp-1286-evidence/`.
+
+Machine-readable state is `../release-matrix.yaml`; the verification entry point
+is `../verify-release.sh`. Required core images are `manager`, `argocd_image`,
+`argocd_dex_image` and `argocd_redis_image`; `argocd_redis_ha_proxy_image` is
+conditional on HA. `backend_image` is excluded because the GitopsService
+controller is registered only when `config.openshift.io` is available, so no
+backend Deployment is expected on GKE; console, Rollouts, Promoter, agents,
+image updater and must-gather are likewise excluded from core validation. An
+allowlisted image does not mean its component runs.
+
+Outstanding gates, not satisfied by this repository: B1 GKE support/version
+scope; B2 installation/packaging decision (including this local chart and the
+v1beta1-only CRD adaptation); B3 release-specific trust requirement; B4
+operator-wide CSV RBAC owner/risk review. Runtime validation and cleanup are
+separately authorized work.
+
 ## Rebuild
 
 ```sh
