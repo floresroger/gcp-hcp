@@ -243,5 +243,27 @@ assert_eq "every required component states an inclusion reason" 0 "$missing_incl
 assert_eq "support approval is not pre-filled" pending "$(yq -r '.spec.support.approval' "$MATRIX")"
 assert_eq "installation approval is not pre-filled" pending "$(yq -r '.spec.installation.approval' "$MATRIX")"
 
+# Contract checks: the matrix must cover exactly the CSV's image references
+# (manager image plus RELATED_IMAGE/* env) and the packaged CRDs must match the
+# documented adaptation.
+CSV="$TOOL_DIR/chart-src/upstream/gitops-operator.v1.22.2.clusterserviceversion.yaml"
+csv_refs="$(yq -r '.spec.install.spec.deployments[0].spec.template.spec.containers[] | select(.name=="manager") | [.image, ((.env // [])[] | select(.name | test("IMAGE")) | .value)][]' "$CSV" | sort -u)"
+assert_eq "matrix covers exactly the CSV image references" "$csv_refs" "$matrix_refs"
+assert_eq "CSV defines only the manager Deployment (no backend)" \
+  openshift-gitops-operator-controller-manager \
+  "$(yq -r '[.spec.install.spec.deployments[].name] | join(",")' "$CSV")"
+
+CRDS_TGZ="$TOOL_DIR/charts/gitops-operator-crds-0.1.0.tgz"
+assert_eq "exactly eight CRDs are packaged" 8 \
+  "$(tar tzf "$CRDS_TGZ" | grep -c '/crds/.*\.yaml$')"
+tar xzf "$CRDS_TGZ" -C "$TMP_DIR"
+ARGOCD_CRD="$(find "$TMP_DIR" -name 'argocds.argoproj.io.yaml' -print -quit)"
+assert_eq "ArgoCD CRD is v1beta1-only" v1beta1 \
+  "$(yq -r '[.spec.versions[].name] | join(",")' "$ARGOCD_CRD")"
+assert_eq "ArgoCD CRD stores v1beta1" v1beta1 \
+  "$(yq -r '.spec.versions[] | select(.storage==true) | .name' "$ARGOCD_CRD")"
+assert_eq "ArgoCD CRD has no conversion webhook" none \
+  "$(yq -r '.spec.conversion.strategy // "none"' "$ARGOCD_CRD")"
+
 echo "gitops-bootstrap release verification checks: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
