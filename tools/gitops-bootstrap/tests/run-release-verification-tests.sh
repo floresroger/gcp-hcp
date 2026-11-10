@@ -101,18 +101,23 @@ def blob(raw):
 manifests = []
 children = {}
 configs = {}
+layers = {}
 for arch in ("amd64", "arm64"):
     cfg = json.dumps({"architecture": arch, "os": "linux",
                       "rootfs": {"type": "layers", "diff_ids": []},
                       "config": {}}, separators=(",", ":")).encode()
     cfg_digest = blob(cfg)
     configs[arch] = (cfg_digest, cfg)
+    layer_raw = f"layer-{arch}\n".encode()
+    layer_digest = blob(layer_raw)
+    layers[arch] = (layer_digest, layer_raw)
     child = json.dumps({
         "schemaVersion": 2,
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
         "config": {"mediaType": "application/vnd.oci.image.config.v1+json",
                    "digest": cfg_digest, "size": len(cfg)},
-        "layers": [],
+        "layers": [{"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    "digest": layer_digest, "size": len(layer_raw)}],
     }, separators=(",", ":")).encode()
     child_digest = blob(child)
     children[arch] = (child_digest, child)
@@ -130,7 +135,8 @@ index_bytes = json.dumps(index, separators=(",", ":")).encode()
 index_digest = blob(index_bytes)
 
 # `--all` copy: manifest.json is the index; each platform child is
-# <hex>.manifest.json; config blobs are <hex>. This is the real `dir:` layout.
+# <hex>.manifest.json; config and layer blobs are <hex>. This is the real
+# `dir:` layout.
 all_dir = base / "layout-index"
 all_dir.mkdir(parents=True)
 (all_dir / "manifest.json").write_bytes(index_bytes)
@@ -138,6 +144,8 @@ for arch, (child_digest, child) in children.items():
     (all_dir / (child_digest.split(":", 1)[1] + ".manifest.json")).write_bytes(child)
     cfg_digest, cfg = configs[arch]
     (all_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+    layer_digest, layer_raw = layers[arch]
+    (all_dir / layer_digest.split(":", 1)[1]).write_bytes(layer_raw)
 
 # Default platform-selected copy: manifest.json is the selected child.
 one_dir = base / "layout-platform"
@@ -146,23 +154,30 @@ amd_digest, amd_child = children["amd64"]
 (one_dir / "manifest.json").write_bytes(amd_child)
 cfg_digest, cfg = configs["amd64"]
 (one_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+layer_digest, layer_raw = layers["amd64"]
+(one_dir / layer_digest.split(":", 1)[1]).write_bytes(layer_raw)
 
 # Single-platform manifest (the OLM bundle shape).
+single_layer = b"single-layer\n"
+single_layer_digest = blob(single_layer)
 single = json.dumps({
     "schemaVersion": 2,
     "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
     "config": {"mediaType": "application/vnd.docker.container.image.v1+json",
                "digest": cfg_digest, "size": len(cfg)},
-    "layers": [],
+    "layers": [{"mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                "digest": single_layer_digest, "size": len(single_layer)}],
 }, separators=(",", ":")).encode()
 single_dir = base / "layout-single"
 single_dir.mkdir(parents=True)
 (single_dir / "manifest.json").write_bytes(single)
 (single_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+(single_dir / single_layer_digest.split(":", 1)[1]).write_bytes(single_layer)
 
-print(index_digest, amd_digest, children["arm64"][0], blob(single))
+print(index_digest, amd_digest, children["arm64"][0], blob(single),
+      configs["amd64"][0], layers["amd64"][0], single_layer_digest)
 PY
-read -r INDEX_DIGEST AMD_DIGEST ARM_DIGEST SINGLE_DIGEST <"$TMP_DIR/layout.out"
+read -r INDEX_DIGEST AMD_DIGEST ARM_DIGEST SINGLE_DIGEST AMD_CFG_DIGEST AMD_LAYER_DIGEST SINGLE_LAYER_DIGEST <"$TMP_DIR/layout.out"
 REF="example.com/team/app@$INDEX_DIGEST"
 LAYOUT_SINGLE="$TMP_DIR/layout-single"
 
@@ -202,6 +217,33 @@ printf 'x' >>"$CORRUPT/${AMD_DIGEST#sha256:}.manifest.json"
 expect_fail "corrupt platform child manifest is rejected" "does not hash to" \
   python3 "$CHECK" layout --dir "$CORRUPT" --reference "$REF" --arch amd64
 
+MISSING_CFG="$TMP_DIR/missing-config"
+cp -R "$LAYOUT_PLATFORM" "$MISSING_CFG"
+rm "$MISSING_CFG/${AMD_CFG_DIGEST#sha256:}"
+expect_fail "layout with a missing config blob is rejected" "required blob missing" \
+  python3 "$CHECK" layout --dir "$MISSING_CFG" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
+
+CORRUPT_CFG="$TMP_DIR/corrupt-config"
+cp -R "$LAYOUT_PLATFORM" "$CORRUPT_CFG"
+printf 'x' >>"$CORRUPT_CFG/${AMD_CFG_DIGEST#sha256:}"
+expect_fail "layout with a corrupt config blob is rejected" "does not hash to" \
+  python3 "$CHECK" layout --dir "$CORRUPT_CFG" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
+
+MISSING_LAYER="$TMP_DIR/missing-layer"
+cp -R "$LAYOUT_INDEX" "$MISSING_LAYER"
+rm "$MISSING_LAYER/${AMD_LAYER_DIGEST#sha256:}"
+expect_fail "indexed layout with a missing selected-platform layer is rejected" "required blob missing" \
+  python3 "$CHECK" layout --dir "$MISSING_LAYER" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
+
+MISSING_SINGLE_LAYER="$TMP_DIR/missing-single-layer"
+cp -R "$LAYOUT_SINGLE" "$MISSING_SINGLE_LAYER"
+rm "$MISSING_SINGLE_LAYER/${SINGLE_LAYER_DIGEST#sha256:}"
+expect_fail "single-manifest layout with a missing layer is rejected" "required blob missing" \
+  python3 "$CHECK" layout --dir "$MISSING_SINGLE_LAYER" --reference "example.com/team/app@$SINGLE_DIGEST" --arch amd64
+
+expect_fail "duplicate digest pin is rejected in layout mode" "exactly one digest pin" \
+  python3 "$CHECK" layout --dir "$LAYOUT_PLATFORM" --reference "$REF@$INDEX_DIGEST" --arch amd64
+
 # Shell entry point against synthetic and real matrices (layout mode only).
 SYNTH_MATRIX="$TMP_DIR/synthetic-matrix.yaml"
 cat >"$SYNTH_MATRIX" <<EOF
@@ -235,6 +277,24 @@ expect_fail "entry point rejects a bundle whose bytes changed" "manifest digest 
 expect_pass "entry point checks an existing layout" \
   "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT_PLATFORM" \
   --key-file "$KEY" --workdir "$TMP_DIR/work1" --arch amd64
+
+mkdir -p "$TMP_DIR/workdir-nonempty"
+printf 'keep\n' >"$TMP_DIR/workdir-nonempty/keep.txt"
+expect_fail "entry point refuses an existing non-empty work directory" "must be new or empty" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT_PLATFORM" \
+  --key-file "$KEY" --workdir "$TMP_DIR/workdir-nonempty" --arch amd64
+assert_eq "existing non-empty work directory is preserved" "keep" \
+  "$(cat "$TMP_DIR/workdir-nonempty/keep.txt")"
+
+ln -s "$TMP_DIR/workdir-nonempty" "$TMP_DIR/workdir-link"
+expect_fail "entry point refuses a symlinked work directory" "must not be a symlink" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT_PLATFORM" \
+  --key-file "$KEY" --workdir "$TMP_DIR/workdir-link" --arch amd64
+
+printf 'x\n' >"$TMP_DIR/workdir-is-file"
+expect_fail "entry point refuses a work directory path that is a file" "is not a directory" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT_PLATFORM" \
+  --key-file "$KEY" --workdir "$TMP_DIR/workdir-is-file" --arch amd64
 
 # Exercise the fresh-copy branch without a registry: a fake skopeo writes the
 # synthetic layout and fails if the source reference carries more than one

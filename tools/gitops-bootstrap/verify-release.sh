@@ -4,11 +4,13 @@
 # Wraps an authenticated `skopeo copy` under an isolated, fail-closed
 # containers/image trust policy, then checks the saved layout against the
 # approved release matrix: the requested index digest is what the registry
-# served, the saved manifest is the approved selected-platform child, and that
-# child's bytes are intact. A platform-selected copy saves the child manifest;
-# a `--all` copy keeps the index as manifest.json. Credentials are read only
-# from --authfile and are never printed, copied, or written into the work
-# directory.
+# served, the saved manifest is the approved selected-platform child, and every
+# config and layer blob that manifest references is present with intact bytes.
+# A platform-selected copy saves the child manifest; a `--all` copy keeps the
+# index as manifest.json. Credentials are read only from --authfile and are
+# never printed, copied, or written into the work directory. The work directory
+# must be new or empty and is created private (0700); an existing directory is
+# never reused, so no unrelated file or symlink can be overwritten.
 #
 # This verifies artifact identity and signature policy. It does not establish
 # GKE support, chart certification, or that a component runs (see
@@ -24,6 +26,7 @@
 #       --layout-dir /tmp/gcp-1286-verify/argocd_image \
 #       --key-file /tmp/release-key2.txt --workdir /tmp/gcp-1286-check --arch amd64
 set -euo pipefail
+umask 077
 
 TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECKER="$TOOL_DIR/verify-release.py"
@@ -37,6 +40,8 @@ Usage: verify-release.sh --matrix FILE --image NAME --workdir DIR --key-file FIL
   --image NAME       'bundle' or a component name from the matrix
                      (e.g. manager, argocd_image)
   --workdir DIR      New or empty directory for the trust policy and copy
+                     (created private, 0700; never an existing non-empty or
+                     symlinked directory)
   --key-file FILE    Red Hat release public key (ASCII-armored GPG)
   --authfile FILE    Registry credential file for skopeo (never printed)
   --layout-dir DIR   Existing skopeo `dir:` layout to check; skips the copy
@@ -80,13 +85,18 @@ done
   usage
   die "missing required argument"
 }
+[[ "$image" =~ ^[A-Za-z0-9_.-]+$ ]] || die "invalid image name: $image"
+[[ "$image" != "." && "$image" != ".." && "$image" != -* ]] || die "invalid image name: $image"
+[[ "$workdir" != -* ]] || die "invalid work directory: $workdir"
 [[ -f "$matrix" ]] || die "matrix not found: $matrix"
 [[ -f "$key_file" && -s "$key_file" ]] || die "key file missing or empty: $key_file"
 command -v yq >/dev/null 2>&1 || die "yq is required"
 command -v python3 >/dev/null 2>&1 || die "python3 is required"
 if [[ -z "$layout_dir" ]]; then
-  command -v skopeo >/dev/null 2>&1 || die "skopeo is required for a fresh copy"
+  # Report a missing credential before a missing tool: the credential is the
+  # operator's input, and requiring skopeo first would mask it.
   [[ -f "$authfile" && -s "$authfile" ]] || die "auth file missing or empty: ${authfile:-<unset>}"
+  command -v skopeo >/dev/null 2>&1 || die "skopeo is required for a fresh copy"
 fi
 
 scope=""
@@ -122,16 +132,29 @@ fi
 [[ -n "$reference" && -n "$index_digest" ]] || die "matrix entry is incomplete: $image"
 [[ "$reference" == *"@$index_digest" ]] || die "matrix reference and index digest disagree: $image"
 [[ "$index_digest" == sha256:* ]] || die "matrix digests must be sha256"
+if [[ "$reference" == *"@"*"@"* ]]; then
+  die "reference must contain exactly one digest pin: $reference"
+fi
+if [[ ! "$reference" =~ ^[A-Za-z0-9._-]+(:[0-9]+)?(/[A-Za-z0-9._-]+)+@sha256:[0-9a-f]{64}$ ]]; then
+  die "reference is malformed: $reference"
+fi
 if [[ "$scope" != "bundle" ]]; then
   [[ -n "$platform_digest" ]] || die "architecture linux/$arch is not advertised by $image; refusing to guess"
   [[ "$platform_digest" == sha256:* ]] || die "matrix digests must be sha256"
 fi
 
-mkdir -p "$workdir"
-workdir="$(cd "$workdir" && pwd)"
+if [[ -e "$workdir" || -L "$workdir" ]]; then
+  [[ ! -L "$workdir" ]] || die "--workdir must not be a symlink: $workdir"
+  [[ -d "$workdir" ]] || die "--workdir is not a directory: $workdir"
+  [[ -z "$(ls -A -- "$workdir")" ]] || die "--workdir must be new or empty: $workdir"
+else
+  mkdir -p -- "$workdir"
+fi
+chmod 0700 "$workdir"
+workdir="$(cd -- "$workdir" && pwd -P)"
 policy="$workdir/policy.json"
 registries_dir="$workdir/registries.d"
-mkdir -p "$registries_dir"
+mkdir -m 0700 -- "$registries_dir"
 
 python3 - "$policy" "$key_file" <<'PY'
 import json, os, sys
@@ -144,7 +167,7 @@ json.dump({
         "keyPath": key,
         "signedIdentity": {"type": "matchRepoDigestOrExact"},
     }]}},
-}, open(policy, "w"), indent=2)
+}, open(policy, "x"), indent=2)
 open(policy, "a").write("\n")
 PY
 chmod 0600 "$policy"

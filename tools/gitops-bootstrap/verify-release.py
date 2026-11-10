@@ -12,6 +12,9 @@ things that a successful copy alone does not prove:
   * the manifest is the expected media type;
   * the selected platform child exists and is the approved platform digest,
     with its bytes intact in the saved layout;
+  * every config and layer blob referenced by the saved manifest (or by the
+    selected platform child) exists and hashes to its declared digest, so an
+    incomplete or truncated layout cannot pass;
   * the containers/image policy is fail-closed (`reject` default, `signedBy`
     with `matchRepoDigestOrExact`), so a typo cannot silently downgrade trust.
 
@@ -56,12 +59,22 @@ def sha256_hex(data: bytes) -> str:
 
 
 def split_reference(reference: str) -> tuple[str, str]:
-    """Split a digest-pinned reference into (repository, 'sha256:<hex>')."""
-    if "@" not in reference:
+    """Split a digest-pinned reference into (repository, 'sha256:<hex>').
+
+    Exactly one ``@`` and one well-formed sha256 digest are allowed. A value
+    like ``repo@sha256:...@sha256:...`` must not be silently reduced to its last
+    component, because the checker would then verify a different identity than
+    the copy source.
+    """
+    if reference.count("@") == 0:
         fail(f"reference is not digest-pinned: {reference}")
-    repository, digest = reference.rsplit("@", 1)
-    if not repository:
+    if reference.count("@") > 1:
+        fail(f"reference must contain exactly one digest pin: {reference}")
+    repository, digest = reference.split("@", 1)
+    if not repository or repository.startswith("/") or repository.endswith("/"):
         fail(f"reference has no repository: {reference}")
+    if "//" in repository or any(c.isspace() for c in repository):
+        fail(f"reference repository is malformed: {reference}")
     if not digest.startswith("sha256:"):
         fail(f"reference digest is not sha256: {reference}")
     hexpart = digest[len("sha256:"):]
@@ -112,6 +125,33 @@ def select_platform(manifest: dict, digest: str, arch: str) -> str:
     return child
 
 
+def verify_manifest_blobs(directory: Path, manifest: dict, saved_digest: str) -> int:
+    """Require every blob the saved manifest references, with intact bytes.
+
+    A manifest whose bytes match the approved digest still proves nothing about
+    the config or layer blobs beside it: a truncated or hostile layout can omit
+    them entirely. Returns the number of verified blobs.
+    """
+    config = manifest.get("config")
+    if not isinstance(config, dict) or not isinstance(config.get("digest"), str):
+        fail(f"saved manifest {saved_digest} has no config digest")
+    layers = manifest.get("layers")
+    if not isinstance(layers, list):
+        fail(f"saved manifest {saved_digest} has no layers list")
+    digests = [config["digest"]]
+    for layer in layers:
+        if not isinstance(layer, dict) or not isinstance(layer.get("digest"), str):
+            fail(f"saved manifest {saved_digest} has a malformed layer entry")
+        digests.append(layer["digest"])
+    for digest in digests:
+        hexpart = digest[len("sha256:"):] if digest.startswith("sha256:") else ""
+        if len(hexpart) != 64 or any(c not in "0123456789abcdef" for c in hexpart):
+            fail(f"saved manifest {saved_digest} references a malformed digest: {digest}")
+        if find_blob(directory, digest) is None:
+            fail(f"required blob missing after copy: {digest}")
+    return len(digests)
+
+
 def check_layout(directory: Path, reference: str, arch: str,
                  expected_platform: str | None) -> dict:
     repository, digest = split_reference(reference)
@@ -134,6 +174,7 @@ def check_layout(directory: Path, reference: str, arch: str,
     media_type = manifest.get("mediaType", "")
 
     child = None
+    blobs = 0
     if actual == digest:
         # A `--all` copy, a single-manifest image, or an OCI layout whose
         # top-level manifest is the requested digest.
@@ -144,14 +185,26 @@ def check_layout(directory: Path, reference: str, arch: str,
                     f"platform digest mismatch for linux/{arch}: "
                     f"expected {expected_platform}, got {child}"
                 )
-            if find_blob(directory, child) is None:
+            child_path = find_blob(directory, child)
+            if child_path is None:
                 fail(f"platform child manifest missing after copy: {child}")
+            try:
+                child_manifest = json.loads(child_path.read_bytes())
+            except json.JSONDecodeError as exc:
+                fail(f"platform child manifest is not valid JSON: {exc}")
+            if child_manifest.get("mediaType", "") not in MANIFEST_TYPES:
+                fail(
+                    "platform child manifest has an unsupported media type: "
+                    f"{child_manifest.get('mediaType')!r}"
+                )
+            blobs = verify_manifest_blobs(directory, child_manifest, child)
         elif media_type in MANIFEST_TYPES:
             if expected_platform and digest != expected_platform:
                 fail(
                     "source manifest is not a multi-architecture index; "
                     f"approved platform digest {expected_platform} cannot be selected"
                 )
+            blobs = verify_manifest_blobs(directory, manifest, actual)
         else:
             fail(f"unsupported manifest media type: {media_type!r}")
     else:
@@ -162,6 +215,7 @@ def check_layout(directory: Path, reference: str, arch: str,
         # digest (and verifies its signature under policy) and saves the chosen
         # child manifest as manifest.json. Linkage is the exact child digest.
         child = actual
+        blobs = verify_manifest_blobs(directory, manifest, actual)
 
     return {
         "repository": repository,
@@ -170,6 +224,7 @@ def check_layout(directory: Path, reference: str, arch: str,
         "arch": arch,
         "platformDigest": child,
         "savedManifestDigest": actual,
+        "blobsVerified": blobs,
     }
 
 
