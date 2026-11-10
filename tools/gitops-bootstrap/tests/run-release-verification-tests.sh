@@ -91,57 +91,116 @@ printf 'synthetic\n' >"$TMP_DIR/other-key.asc"
 expect_fail "policy bound to a different key file is rejected" "keyPath" \
   python3 "$CHECK" policy --policy "$BAD_POLICY" --key-file "$KEY"
 
-LAYOUT="$TMP_DIR/layout"
-python3 - "$LAYOUT" >"$TMP_DIR/layout.out" <<'PY'
+LAYOUT_INDEX="$TMP_DIR/layout-index"
+LAYOUT_PLATFORM="$TMP_DIR/layout-platform"
+python3 - "$TMP_DIR" >"$TMP_DIR/layout.out" <<'PY'
 import hashlib, json, pathlib, sys
-root = pathlib.Path(sys.argv[1])
-(root / "blobs" / "sha256").mkdir(parents=True, exist_ok=True)
+base = pathlib.Path(sys.argv[1])
 def blob(raw):
-    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
-    (root / "blobs" / "sha256" / digest.split(":", 1)[1]).write_bytes(raw)
-    return digest
-amd = blob(b'{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{},"layers":[]}')
-arm = blob(b'{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{},"layers":[{"variant":"v8"}]}')
-index = {
-    "schemaVersion": 2,
-    "mediaType": "application/vnd.oci.image.index.v1+json",
-    "manifests": [
-        {"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": amd,
-         "size": 1, "platform": {"os": "linux", "architecture": "amd64"}},
-        {"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": arm,
-         "size": 2, "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"}},
-    ],
-}
-raw = json.dumps(index, separators=(",", ":")).encode()
-(root / "manifest.json").write_bytes(raw)
-print("sha256:" + hashlib.sha256(raw).hexdigest(), amd, arm)
-PY
-read -r INDEX_DIGEST AMD_DIGEST ARM_DIGEST <"$TMP_DIR/layout.out"
-REF="example.com/team/app@$INDEX_DIGEST"
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+manifests = []
+children = {}
+configs = {}
+for arch in ("amd64", "arm64"):
+    cfg = json.dumps({"architecture": arch, "os": "linux",
+                      "rootfs": {"type": "layers", "diff_ids": []},
+                      "config": {}}, separators=(",", ":")).encode()
+    cfg_digest = blob(cfg)
+    configs[arch] = (cfg_digest, cfg)
+    child = json.dumps({
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "config": {"mediaType": "application/vnd.oci.image.config.v1+json",
+                   "digest": cfg_digest, "size": len(cfg)},
+        "layers": [],
+    }, separators=(",", ":")).encode()
+    child_digest = blob(child)
+    children[arch] = (child_digest, child)
+    platform = {"os": "linux", "architecture": arch}
+    if arch == "arm64":
+        platform["variant"] = "v8"
+    manifests.append({
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": child_digest, "size": len(child), "platform": platform,
+    })
+index = {"schemaVersion": 2,
+         "mediaType": "application/vnd.oci.image.index.v1+json",
+         "manifests": manifests}
+index_bytes = json.dumps(index, separators=(",", ":")).encode()
+index_digest = blob(index_bytes)
 
-expect_pass "approved index digest and platform child are accepted" \
-  python3 "$CHECK" layout --dir "$LAYOUT" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
+# `--all` copy: manifest.json is the index; each platform child is
+# <hex>.manifest.json; config blobs are <hex>. This is the real `dir:` layout.
+all_dir = base / "layout-index"
+all_dir.mkdir(parents=True)
+(all_dir / "manifest.json").write_bytes(index_bytes)
+for arch, (child_digest, child) in children.items():
+    (all_dir / (child_digest.split(":", 1)[1] + ".manifest.json")).write_bytes(child)
+    cfg_digest, cfg = configs[arch]
+    (all_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+
+# Default platform-selected copy: manifest.json is the selected child.
+one_dir = base / "layout-platform"
+one_dir.mkdir(parents=True)
+amd_digest, amd_child = children["amd64"]
+(one_dir / "manifest.json").write_bytes(amd_child)
+cfg_digest, cfg = configs["amd64"]
+(one_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+
+# Single-platform manifest (the OLM bundle shape).
+single = json.dumps({
+    "schemaVersion": 2,
+    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+    "config": {"mediaType": "application/vnd.docker.container.image.v1+json",
+               "digest": cfg_digest, "size": len(cfg)},
+    "layers": [],
+}, separators=(",", ":")).encode()
+single_dir = base / "layout-single"
+single_dir.mkdir(parents=True)
+(single_dir / "manifest.json").write_bytes(single)
+(single_dir / cfg_digest.split(":", 1)[1]).write_bytes(cfg)
+
+print(index_digest, amd_digest, children["arm64"][0], blob(single))
+PY
+read -r INDEX_DIGEST AMD_DIGEST ARM_DIGEST SINGLE_DIGEST <"$TMP_DIR/layout.out"
+REF="example.com/team/app@$INDEX_DIGEST"
+LAYOUT_SINGLE="$TMP_DIR/layout-single"
+
+expect_pass "all-platform copy preserves the approved index digest" \
+  python3 "$CHECK" layout --dir "$LAYOUT_INDEX" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
+
+expect_pass "platform-selected copy matches the approved platform digest" \
+  python3 "$CHECK" layout --dir "$LAYOUT_PLATFORM" --reference "$REF" --arch amd64 --platform-digest "$AMD_DIGEST"
 
 expect_fail "wrong platform digest is rejected" "platform digest mismatch" \
-  python3 "$CHECK" layout --dir "$LAYOUT" --reference "$REF" --arch amd64 --platform-digest "$ARM_DIGEST"
+  python3 "$CHECK" layout --dir "$LAYOUT_INDEX" --reference "$REF" --arch amd64 --platform-digest "$ARM_DIGEST"
+
+expect_fail "platform-selected copy with the wrong approved digest is rejected" "manifest digest mismatch" \
+  python3 "$CHECK" layout --dir "$LAYOUT_PLATFORM" --reference "$REF" --arch amd64 --platform-digest "$ARM_DIGEST"
 
 expect_fail "unadvertised architecture is rejected" "does not advertise linux/s390x" \
-  python3 "$CHECK" layout --dir "$LAYOUT" --reference "$REF" --arch s390x
+  python3 "$CHECK" layout --dir "$LAYOUT_INDEX" --reference "$REF" --arch s390x
 
 expect_fail "non-digest reference is rejected" "not digest-pinned" \
-  python3 "$CHECK" layout --dir "$LAYOUT" --reference "example.com/team/app:1.0" --arch amd64
+  python3 "$CHECK" layout --dir "$LAYOUT_INDEX" --reference "example.com/team/app:1.0" --arch amd64
 
 TAMPERED="$TMP_DIR/tampered"
-cp -R "$LAYOUT" "$TAMPERED"
+cp -R "$LAYOUT_INDEX" "$TAMPERED"
 printf 'x' >>"$TAMPERED/manifest.json"
-expect_fail "tampered manifest content is rejected" "manifest digest mismatch" \
+expect_fail "tampered index content is rejected" "manifest digest mismatch" \
   python3 "$CHECK" layout --dir "$TAMPERED" --reference "$REF" --arch amd64
 
 MISSING="$TMP_DIR/missing"
-cp -R "$LAYOUT" "$MISSING"
-rm "$MISSING/blobs/sha256/${AMD_DIGEST#sha256:}"
-expect_fail "missing platform child blob is rejected" "platform child blob missing" \
+cp -R "$LAYOUT_INDEX" "$MISSING"
+rm "$MISSING/${AMD_DIGEST#sha256:}.manifest.json"
+expect_fail "missing platform child manifest is rejected" "platform child manifest missing" \
   python3 "$CHECK" layout --dir "$MISSING" --reference "$REF" --arch amd64
+
+CORRUPT="$TMP_DIR/corrupt"
+cp -R "$LAYOUT_INDEX" "$CORRUPT"
+printf 'x' >>"$CORRUPT/${AMD_DIGEST#sha256:}.manifest.json"
+expect_fail "corrupt platform child manifest is rejected" "does not hash to" \
+  python3 "$CHECK" layout --dir "$CORRUPT" --reference "$REF" --arch amd64
 
 # Shell entry point against synthetic and real matrices (layout mode only).
 SYNTH_MATRIX="$TMP_DIR/synthetic-matrix.yaml"
@@ -149,6 +208,9 @@ cat >"$SYNTH_MATRIX" <<EOF
 apiVersion: gcp-hcp.io/v1alpha1
 kind: GitOpsReleaseMatrix
 spec:
+  bundle:
+    reference: example.com/team/app@$SINGLE_DIGEST
+    mediaType: application/vnd.docker.distribution.manifest.v2+json
   components:
     required:
       - name: fake
@@ -162,8 +224,16 @@ spec:
         exclusionReason: "no Config API on GKE"
 EOF
 
+expect_pass "entry point checks the bundle metadata manifest" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image bundle --layout-dir "$LAYOUT_SINGLE" \
+  --key-file "$KEY" --workdir "$TMP_DIR/work-bundle" --arch amd64
+
+expect_fail "entry point rejects a bundle whose bytes changed" "manifest digest mismatch" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image bundle --layout-dir "$LAYOUT_PLATFORM" \
+  --key-file "$KEY" --workdir "$TMP_DIR/work-bundle-bad" --arch amd64
+
 expect_pass "entry point checks an existing layout" \
-  "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT" \
+  "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --layout-dir "$LAYOUT_PLATFORM" \
   --key-file "$KEY" --workdir "$TMP_DIR/work1" --arch amd64
 
 # Exercise the fresh-copy branch without a registry: a fake skopeo writes the
@@ -198,12 +268,12 @@ spec:
     excluded: []
 EOF
 expect_pass "entry point copies and re-checks under the generated policy" \
-  env PATH="$TMP_DIR/bin:$PATH" FAKE_LAYOUT="$LAYOUT" \
+  env PATH="$TMP_DIR/bin:$PATH" FAKE_LAYOUT="$LAYOUT_PLATFORM" \
   "$WRAP" --matrix "$SYNTH_MATRIX" --image fake --authfile "$TMP_DIR/auth.json" \
   --key-file "$KEY" --workdir "$TMP_DIR/work-copy" --arch amd64
 
 expect_fail "entry point refuses a duplicate-digest source" "exactly one digest" \
-  env PATH="$TMP_DIR/bin:$PATH" FAKE_LAYOUT="$LAYOUT" \
+  env PATH="$TMP_DIR/bin:$PATH" FAKE_LAYOUT="$LAYOUT_PLATFORM" \
   "$WRAP" --matrix "$TMP_DIR/duplicate-matrix.yaml" --image fake \
   --authfile "$TMP_DIR/auth.json" --key-file "$KEY" --workdir "$TMP_DIR/work-dup" --arch amd64
 
@@ -212,15 +282,15 @@ expect_fail "entry point rejects a tampered layout" "manifest digest mismatch" \
   --key-file "$KEY" --workdir "$TMP_DIR/work2" --arch amd64
 
 expect_fail "entry point rejects an excluded component" "excluded from core validation" \
-  "$WRAP" --matrix "$MATRIX" --image backend_image --layout-dir "$LAYOUT" \
+  "$WRAP" --matrix "$MATRIX" --image backend_image --layout-dir "$LAYOUT_PLATFORM" \
   --key-file "$KEY" --workdir "$TMP_DIR/work3"
 
 expect_fail "entry point rejects an unknown component" "not in the release matrix" \
-  "$WRAP" --matrix "$MATRIX" --image not-a-component --layout-dir "$LAYOUT" \
+  "$WRAP" --matrix "$MATRIX" --image not-a-component --layout-dir "$LAYOUT_PLATFORM" \
   --key-file "$KEY" --workdir "$TMP_DIR/work4"
 
 expect_fail "entry point refuses an unadvertised architecture" "not advertised" \
-  "$WRAP" --matrix "$MATRIX" --image manager --layout-dir "$LAYOUT" \
+  "$WRAP" --matrix "$MATRIX" --image manager --layout-dir "$LAYOUT_PLATFORM" \
   --key-file "$KEY" --workdir "$TMP_DIR/work5" --arch riscv64
 
 expect_fail "entry point requires an auth file for a fresh copy" "auth file missing" \

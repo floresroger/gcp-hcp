@@ -6,13 +6,19 @@ itself: `verify-release.sh` performs the authenticated, policy-enforcing
 `skopeo copy`, which is the cryptographic trust step. This module checks the
 things that a successful copy alone does not prove:
 
-  * the saved top-level manifest is byte-identical to the approved digest;
+  * the saved manifest is byte-identical to the approved index digest (a
+    `--all` copy) or to the approved selected-platform digest (the default
+    platform-selected copy, whose source reference still pins the index);
   * the manifest is the expected media type;
-  * the selected platform child exists and is the approved platform digest;
-  * a signed identity, when supplied, names the same repository and manifest
-    digest (a tag-derived identity never substitutes for repository binding);
+  * the selected platform child exists and is the approved platform digest,
+    with its bytes intact in the saved layout;
   * the containers/image policy is fail-closed (`reject` default, `signedBy`
     with `matchRepoDigestOrExact`), so a typo cannot silently downgrade trust.
+
+The checker accepts the real `containers/image` `dir:` layout: `manifest.json`,
+`version`, config/layer blobs named `<hex>`, and (for `--all`) platform child
+manifests named `<hex>.manifest.json`. An OCI layout (`blobs/sha256/<hex>`) is
+also accepted so the checks work on an `oci:` copy.
 
 Everything here is offline and deterministic; tests exercise both passing and
 deliberately broken inputs. See `verify-release.sh` and `release-matrix.yaml`.
@@ -64,6 +70,48 @@ def split_reference(reference: str) -> tuple[str, str]:
     return repository, digest
 
 
+def find_blob(directory: Path, digest: str) -> Path | None:
+    """Locate a blob in a `dir:` or OCI-on-disk layout and verify its bytes.
+
+    Returns the path when a candidate exists and hashes to ``digest``; returns
+    None when absent. Raises when a candidate exists but is corrupt, because
+    that is a tamper signal rather than a missing-file case.
+    """
+    hexpart = digest[len("sha256:"):]
+    candidates = (
+        directory / hexpart,
+        directory / f"{hexpart}.manifest.json",
+        directory / "blobs" / "sha256" / hexpart,
+    )
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        if "sha256:" + sha256_hex(candidate.read_bytes()) != digest:
+            fail(f"blob content does not hash to {digest}: {candidate}")
+        return candidate
+    return None
+
+
+def select_platform(manifest: dict, digest: str, arch: str) -> str:
+    wanted_arch, _, wanted_variant = arch.partition("/")
+    matches = []
+    for platform in manifest.get("manifests", []):
+        p = platform.get("platform", {})
+        if p.get("os") != "linux" or p.get("architecture") != wanted_arch:
+            continue
+        if wanted_variant and p.get("variant") != wanted_variant:
+            continue
+        matches.append(platform)
+    if not matches:
+        fail(f"index {digest} does not advertise linux/{arch}")
+    if len(matches) > 1:
+        fail(f"index {digest} advertises ambiguous entries for linux/{arch}")
+    child = matches[0].get("digest", "")
+    if not child.startswith("sha256:") or len(child) != len("sha256:") + 64:
+        fail(f"index {digest} has a malformed child digest for linux/{arch}")
+    return child
+
+
 def check_layout(directory: Path, reference: str, arch: str,
                  expected_platform: str | None) -> dict:
     repository, digest = split_reference(reference)
@@ -72,52 +120,48 @@ def check_layout(directory: Path, reference: str, arch: str,
         fail(f"{directory}: manifest.json not found")
     manifest_bytes = manifest_path.read_bytes()
     actual = "sha256:" + sha256_hex(manifest_bytes)
-    if actual != digest:
+
+    # A top-level digest that is neither the requested index digest nor the
+    # approved platform digest is tamper/mismatch evidence; report that before
+    # attempting to parse possibly-garbage bytes.
+    if actual != digest and actual != expected_platform:
         fail(f"manifest digest mismatch: expected {digest}, got {actual}")
 
     try:
         manifest = json.loads(manifest_bytes)
     except json.JSONDecodeError as exc:
         fail(f"manifest.json is not valid JSON: {exc}")
-
     media_type = manifest.get("mediaType", "")
+
     child = None
-    if media_type in INDEX_TYPES:
-        wanted_arch, _, wanted_variant = arch.partition("/")
-        matches = []
-        for platform in manifest.get("manifests", []):
-            p = platform.get("platform", {})
-            if p.get("os") != "linux" or p.get("architecture") != wanted_arch:
-                continue
-            if wanted_variant and p.get("variant") != wanted_variant:
-                continue
-            matches.append(platform)
-        if not matches:
-            fail(f"index {digest} does not advertise linux/{arch}")
-        if len(matches) > 1:
-            fail(f"index {digest} advertises ambiguous entries for linux/{arch}")
-        child = matches[0].get("digest", "")
-        if not child.startswith("sha256:") or len(child) != len("sha256:") + 64:
-            fail(f"index {digest} has a malformed child digest for linux/{arch}")
-        if expected_platform and child != expected_platform:
-            fail(
-                f"platform digest mismatch for linux/{arch}: "
-                f"expected {expected_platform}, got {child}"
-            )
-        blob = directory / "blobs" / "sha256" / child[len("sha256:"):]
-        if not blob.is_file():
-            fail(f"platform child blob missing after copy: {child}")
-        child_bytes = blob.read_bytes()
-        if "sha256:" + sha256_hex(child_bytes) != child:
-            fail(f"platform child content does not hash to {child}")
-    elif media_type in MANIFEST_TYPES:
-        if expected_platform and digest != expected_platform:
-            fail(
-                "source manifest is not a multi-architecture index; "
-                f"approved platform digest {expected_platform} cannot be selected"
-            )
+    if actual == digest:
+        # A `--all` copy, a single-manifest image, or an OCI layout whose
+        # top-level manifest is the requested digest.
+        if media_type in INDEX_TYPES:
+            child = select_platform(manifest, digest, arch)
+            if expected_platform and child != expected_platform:
+                fail(
+                    f"platform digest mismatch for linux/{arch}: "
+                    f"expected {expected_platform}, got {child}"
+                )
+            if find_blob(directory, child) is None:
+                fail(f"platform child manifest missing after copy: {child}")
+        elif media_type in MANIFEST_TYPES:
+            if expected_platform and digest != expected_platform:
+                fail(
+                    "source manifest is not a multi-architecture index; "
+                    f"approved platform digest {expected_platform} cannot be selected"
+                )
+        else:
+            fail(f"unsupported manifest media type: {media_type!r}")
     else:
-        fail(f"unsupported manifest media type: {media_type!r}")
+        # Reaching here means actual == expected_platform (guarded above).
+        if media_type not in MANIFEST_TYPES:
+            fail(f"unsupported manifest media type: {media_type!r}")
+        # Default platform-selected copy: skopeo resolves the requested index
+        # digest (and verifies its signature under policy) and saves the chosen
+        # child manifest as manifest.json. Linkage is the exact child digest.
+        child = actual
 
     return {
         "repository": repository,
@@ -125,6 +169,7 @@ def check_layout(directory: Path, reference: str, arch: str,
         "mediaType": media_type,
         "arch": arch,
         "platformDigest": child,
+        "savedManifestDigest": actual,
     }
 
 

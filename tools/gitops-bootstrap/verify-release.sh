@@ -3,9 +3,12 @@
 #
 # Wraps an authenticated `skopeo copy` under an isolated, fail-closed
 # containers/image trust policy, then checks the saved layout against the
-# approved release matrix (exact manifest digest, media type, selected platform
-# child). Credentials are read only from --authfile and are never printed,
-# copied, or written into the work directory.
+# approved release matrix: the requested index digest is what the registry
+# served, the saved manifest is the approved selected-platform child, and that
+# child's bytes are intact. A platform-selected copy saves the child manifest;
+# a `--all` copy keeps the index as manifest.json. Credentials are read only
+# from --authfile and are never printed, copied, or written into the work
+# directory.
 #
 # This verifies artifact identity and signature policy. It does not establish
 # GKE support, chart certification, or that a component runs (see
@@ -31,7 +34,8 @@ Usage: verify-release.sh --matrix FILE --image NAME --workdir DIR --key-file FIL
          (--authfile FILE | --layout-dir DIR) [--arch ARCH]
 
   --matrix FILE      release-matrix.yaml
-  --image NAME       Component name from the matrix (e.g. manager, argocd_image)
+  --image NAME       'bundle' or a component name from the matrix
+                     (e.g. manager, argocd_image)
   --workdir DIR      New or empty directory for the trust policy and copy
   --key-file FILE    Red Hat release public key (ASCII-armored GPG)
   --authfile FILE    Registry credential file for skopeo (never printed)
@@ -39,10 +43,12 @@ Usage: verify-release.sh --matrix FILE --image NAME --workdir DIR --key-file FIL
   --arch ARCH        linux architecture from the matrix platforms map
                      (amd64 by default; arm64/v8 means arm64 + variant v8)
 
-The approved digest and platform child come from the matrix. The copy is
-rejected for an unknown image, an excluded component, an unsupported
-architecture, a non-digest reference, or any policy/signature/identity
-mismatch. There is no insecure-policy or TLS-bypass option.
+The approved digest and platform child come from the matrix. `bundle` is the
+single-platform OLM metadata manifest (not a runnable image) and is checked
+against `spec.bundle.reference`. The copy is rejected for an unknown image, an
+excluded component, an unsupported architecture, a non-digest reference, or any
+policy/signature/identity mismatch. There is no insecure-policy or TLS-bypass
+option.
 EOF
 }
 
@@ -84,31 +90,42 @@ if [[ -z "$layout_dir" ]]; then
 fi
 
 scope=""
-for candidate in required conditional excluded; do
-  count="$(IMAGE="$image" yq -r "[.spec.components.$candidate[] | select(.name == strenv(IMAGE))] | length" "$matrix")"
-  if [[ "$count" != "0" ]]; then
-    scope="$candidate"
-    break
+if [[ "$image" == "bundle" ]]; then
+  scope="bundle"
+  reference="$(yq -r '.spec.bundle.reference // ""' "$matrix")"
+  [[ -n "$reference" ]] || die "matrix has no bundle reference"
+  index_digest="${reference##*@}"
+  platform_digest=""
+else
+  for candidate in required conditional excluded; do
+    count="$(IMAGE="$image" yq -r "[.spec.components.$candidate[] | select(.name == strenv(IMAGE))] | length" "$matrix")"
+    if [[ "$count" != "0" ]]; then
+      scope="$candidate"
+      break
+    fi
+  done
+  [[ -n "$scope" ]] || die "image is not in the release matrix: $image"
+  if [[ "$scope" == "excluded" ]]; then
+    reason="$(IMAGE="$image" yq -r \
+      '.spec.components.excluded[] | select(.name == strenv(IMAGE)) | .exclusionReason' "$matrix")"
+    die "image is excluded from core validation: $image ($reason)"
   fi
-done
-[[ -n "$scope" ]] || die "image is not in the release matrix: $image"
-if [[ "$scope" == "excluded" ]]; then
-  reason="$(IMAGE="$image" yq -r \
-    '.spec.components.excluded[] | select(.name == strenv(IMAGE)) | .exclusionReason' "$matrix")"
-  die "image is excluded from core validation: $image ($reason)"
-fi
 
-reference="$(IMAGE="$image" yq -r \
-  ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .reference" "$matrix")"
-index_digest="$(IMAGE="$image" yq -r \
-  ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .indexDigest" "$matrix")"
-platform_digest="$(IMAGE="$image" ARCH="$arch" yq -r \
-  ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .platforms[strenv(ARCH)] // \"\"" "$matrix")"
+  reference="$(IMAGE="$image" yq -r \
+    ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .reference" "$matrix")"
+  index_digest="$(IMAGE="$image" yq -r \
+    ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .indexDigest" "$matrix")"
+  platform_digest="$(IMAGE="$image" ARCH="$arch" yq -r \
+    ".spec.components.$scope[] | select(.name == strenv(IMAGE)) | .platforms[strenv(ARCH)] // \"\"" "$matrix")"
+fi
 
 [[ -n "$reference" && -n "$index_digest" ]] || die "matrix entry is incomplete: $image"
 [[ "$reference" == *"@$index_digest" ]] || die "matrix reference and index digest disagree: $image"
-[[ -n "$platform_digest" ]] || die "architecture linux/$arch is not advertised by $image; refusing to guess"
-[[ "$index_digest" == sha256:* && "$platform_digest" == sha256:* ]] || die "matrix digests must be sha256"
+[[ "$index_digest" == sha256:* ]] || die "matrix digests must be sha256"
+if [[ "$scope" != "bundle" ]]; then
+  [[ -n "$platform_digest" ]] || die "architecture linux/$arch is not advertised by $image; refusing to guess"
+  [[ "$platform_digest" == sha256:* ]] || die "matrix digests must be sha256"
+fi
 
 mkdir -p "$workdir"
 workdir="$(cd "$workdir" && pwd)"
@@ -159,5 +176,9 @@ fi
 python3 "$CHECKER" layout --dir "$dest" --reference "$reference" \
   --arch "$arch" --platform-digest "$platform_digest"
 
-echo "verify-release: ok image=$image digest=$index_digest arch=linux/$arch platform=$platform_digest"
+if [[ "$scope" == "bundle" ]]; then
+  echo "verify-release: ok image=bundle digest=$index_digest (single OLM metadata manifest; not deployable)"
+else
+  echo "verify-release: ok image=$image digest=$index_digest arch=linux/$arch platform=$platform_digest"
+fi
 echo "verify-release: layout retained at $dest (remove it explicitly when evidence is no longer needed)"

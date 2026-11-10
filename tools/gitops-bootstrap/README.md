@@ -239,12 +239,16 @@ RBAC exception needs its own owner/risk review (B4) before activation.
 ```
 
 It copies the approved digest under an isolated, fail-closed containers/image
-policy and then checks the saved manifest digest, media type, and selected
-platform child against the matrix. `--layout-dir DIR` re-checks an existing
-copy without a registry. It refuses excluded components, unknown images,
-unadvertised architectures, non-digest references, a permissive policy, and any
-digest/platform mismatch. It does not print credentials, does not offer an
-insecure option, and does not establish GKE support or runtime behavior.
+policy, then checks the saved layout against the matrix: the source index digest
+is the approved one, the saved manifest is the approved selected-platform child
+with intact bytes, and `--all`-copied layouts also verify the approved index and
+child linkage. A platform-selected `dir:` copy saves the child manifest, so the
+index digest is enforced by the pinned source reference and signature policy
+rather than by the saved `manifest.json`. `--layout-dir DIR` re-checks an
+existing copy without a registry. It refuses excluded components, unknown
+images, unadvertised architectures, non-digest references, a permissive policy,
+and any digest/platform mismatch. It does not print credentials, does not offer
+an insecure option, and does not establish GKE support or runtime behavior.
 
 The supporting manifests, detached signatures, key, and logs from the review
 are retained in the infra repository at `docs/gcp-1286-evidence/`; refresh that
