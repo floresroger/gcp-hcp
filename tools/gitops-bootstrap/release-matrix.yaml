@@ -89,6 +89,14 @@ spec:
     gke:
       scope: unapproved
       kubernetesVersions: unapproved
+      observedBaseline:
+        # Recorded 2026-11-11 for the B1 request: the target is the GKE version
+        # the GCP HCP environments already run, not a separately chosen one.
+        version: "1.35.8-gke.1796000"
+        autopilot: true
+        observedOn: [gcp-hcp-int-global-gke, gcp-hcp-stg-global-gke]
+        source: "gcloud container clusters list, this account"
+        gap: "MC/region projects were not readable by this account; confirm the same version there before treating it as the validation baseline."
       architectures: unapproved
       techPreview: "Source Hydrator and GitOps Promoter are Technology Preview; both are out of scope here."
     note: "No GKE support, SLA or Tech Preview tier for the installation as a whole is claimed."
