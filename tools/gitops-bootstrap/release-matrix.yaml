@@ -53,12 +53,13 @@ spec:
       bundleManifest: true
       relatedImageIndexManifests: 15
       platformChildSignatures: false
-      releaseKey3Sigstore: false
+      releaseKey3Sigstore: true
+      releaseKey3Method: "sigstore .sig artifacts; every registry.redhat.io signature verifies and binds the approved digest, signed by release key 3 (SPKI SHA-256 ending E60D446E63405576)"
       bundleFullPolicyCopy: true
       tamperedManifestRejected: true
     limits:
       - "Index manifests passed standalone verification; platform child manifests and their layers were not independently fetched/verified."
-      - "Release-key-3 Sigstore signatures were not tested; whether they are required is B3."
+      - "Release-key-3 Sigstore signatures now verify for the bundle and the four required images (4 signatures each, 6 for redis), all binding the approved digest. Whether key 3 is required for this deployment is still a Product Security policy question (B3)."
       - "No chart signature exists: the charts are local packaging."
   platforms:
     advertised: [linux/amd64, linux/arm64/v8, linux/ppc64le, linux/s390x]
