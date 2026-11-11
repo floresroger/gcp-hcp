@@ -255,8 +255,9 @@ credentials, does not offer an insecure option, and does not establish GKE
 support or runtime behavior.
 
 The supporting manifests, detached signatures, key, and logs from the review
-are retained in the infra repository at `docs/gcp-1286-evidence/`; refresh that
-evidence against registry.redhat.io before relying on it.
+are retained on the gcp-hcp-infra branch `gcp-1286/t3-release-validation` under
+`docs/gcp-1286-evidence/`; refresh that evidence against registry.redhat.io
+before relying on it.
 
 ## Offline checks
 

@@ -2,15 +2,16 @@
 #
 # Machine-readable record of the release selected for bounded validation. The
 # digests below were read and signature-checked during the GCP-1286 review; the
-# supporting evidence (manifests, detached signatures, key, logs) is retained in
-# the infra repository at docs/gcp-1286-evidence/. Refresh that evidence against
-# registry.redhat.io before relying on it; do not hand-edit digests.
+# supporting evidence (manifests, detached signatures, key, logs) is retained on
+# the gcp-hcp-infra branch `gcp-1286/t3-release-validation` under
+# `docs/gcp-1286-evidence/`. Refresh that evidence against registry.redhat.io
+# before relying on it; do not hand-edit digests.
 #
 # This file is NOT a support or certification statement. `support.approval`
 # stays `pending` until GitOps engineering/QE supplies the GKE scope (B1) and
 # the installation/packaging and trust decisions are recorded (B2/B3). The
 # operator-wide CSV RBAC exception needs its own owner/risk review (B4) before
-# any activation. See docs/GCP-1286_PLAN.md in gcp-hcp-infra.
+# any activation. See `docs/GCP-1286_PLAN.md` on the same gcp-hcp-infra branch.
 apiVersion: gcp-hcp.io/v1alpha1
 kind: GitOpsReleaseMatrix
 metadata:
