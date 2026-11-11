@@ -227,9 +227,11 @@ fails closed rather than silently producing unreviewed output):
 `release-matrix.yaml` records the OpenShift GitOps release selected for
 bounded validation, its provenance, trust results, and the required,
 conditional, and excluded component images. `support.approval` stays
-`pending` until GitOps engineering/QE supplies the GKE scope (B1) and the
-installation and trust decisions are recorded (B2/B3); the operator-wide CSV
-RBAC exception needs its own owner/risk review (B4) before activation.
+`pending` until GitOps engineering/QE supplies the GKE scope (B1b) and a person
+confirms the installation and trust decisions (B2/B3); channel guidance is
+recorded in the matrix's `guidance` fields but changes no approval. The
+operator-wide CSV RBAC exception needs its own owner/risk review (B4) before
+activation.
 
 `verify-release.sh` is the single artifact verification entry point:
 

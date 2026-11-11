@@ -8,10 +8,14 @@
 # before relying on it; do not hand-edit digests.
 #
 # This file is NOT a support or certification statement. `support.approval`
-# stays `pending` until GitOps engineering/QE supplies the GKE scope (B1) and
+# stays `pending` until GitOps engineering/QE supplies the GKE scope (B1b) and
 # the installation/packaging and trust decisions are recorded (B2/B3). The
 # operator-wide CSV RBAC exception needs its own owner/risk review (B4) before
 # any activation. See `docs/GCP-1286_PLAN.md` on the same gcp-hcp-infra branch.
+#
+# Guidance received 2026-11-11 from the GitOps engineering channel (their AI
+# assistant, self-labelled "check for accuracy") is recorded in the `guidance`
+# fields below. It is not a human decision record, so no approval changed.
 apiVersion: gcp-hcp.io/v1alpha1
 kind: GitOpsReleaseMatrix
 metadata:
@@ -83,10 +87,21 @@ spec:
     deviations:
       - "ArgoCD CRD is v1beta1-only with no conversion webhook; ENABLE_CONVERSION_WEBHOOK=false."
       - "Manager resources are an untuned local budget, not the CSV's resources: {}."
+    guidance:
+      received: "2026-11-11"
+      source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
+      states: "Local packaging is acceptable for validation; no official vendor chart exists for 1.22.x and none will be produced before 1.23; the approach matches the GITOPS-10648 xKS path (strip v1alpha1 and spec.conversion, ENABLE_CONVERSION_WEBHOOK=false, Helm install)."
+      verified: "Packaged argocds CRD has no spec.conversion key and a single v1beta1 served/storage version (run-step2-tests.sh:134,333; run-release-verification-tests.sh:395)."
+      effect: "No human has confirmed in writing and the reply author could not open gcp-hcp#166, so installation approval stays pending."
     note: "Local chart packaging, not vendor-published; adopting or replacing it is B2."
   support:
     approval: pending
-    blockedBy: [B1, B2, B3, B4]
+    blockedBy: [B1b, B2]
+    guidance:
+      received: "2026-11-11"
+      source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
+      states: "1.22.2-7 is viable for our own bounded xKS validation; no formal 1.22.x xKS certification; certification and support model targeted at 1.23; no Autopilot-specific testing; arm64 not in xKS certification scope; no documented minimum Kubernetes patch level; no formal escalation contacts (#forum-openshift-gitops is the public channel)."
+      effect: "B1a settled (we proceed, claiming nothing certified). B1b partially answered; escalation contact and support-tier wording remain open. Not a support statement."
     gke:
       scope: unapproved
       kubernetesVersions: unapproved

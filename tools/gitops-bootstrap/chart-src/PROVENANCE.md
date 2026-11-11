@@ -279,7 +279,8 @@ no vendor signature. Release-key-3 Sigstore signatures **were** verified on
 2026-11-11 for the bundle and the four required images (every
 `registry.redhat.io` signature in each `sha256-<digest>.sig` artifact verifies,
 binds the approved digest, and is signed by release key 3); whether key 3 is
-*required* is B3, not something this repository decides.
+*required* is B3, a policy question routed to Product Security and ultimately
+recorded by us, not something this repository decides.
 Manifests, signatures, key and logs are retained in
 `gcp-hcp-infra/docs/gcp-1286-evidence/`.
 
@@ -292,11 +293,13 @@ backend Deployment is expected on GKE; console, Rollouts, Promoter, agents,
 image updater and must-gather are likewise excluded from core validation. An
 allowlisted image does not mean its component runs.
 
-Outstanding gates, not satisfied by this repository: B1 GKE support/version
-scope; B2 installation/packaging decision (including this local chart and the
-v1beta1-only CRD adaptation); B3 release-specific trust requirement; B4
-operator-wide CSV RBAC owner/risk review. Runtime validation and cleanup are
-separately authorized work.
+Outstanding gates, not satisfied by this repository: B1b GKE support tier and a
+named escalation contact; B2 human confirmation of the installation/packaging
+answer (channel guidance says the local chart and the v1beta1-only CRD
+adaptation are acceptable, and the CRD's missing `spec.conversion` is verified);
+B3 the release-specific trust policy record, now an internal decision informed by
+Product Security; B4 operator-wide CSV RBAC owner/risk review. Runtime validation
+and cleanup are separately authorized work.
 
 ## Rebuild
 
