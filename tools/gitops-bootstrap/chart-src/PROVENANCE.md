@@ -213,11 +213,14 @@ Status and boundaries:
   controller grant in the previous section. GCP-1285 is the exit criterion for
   that application-controller grant **only**; nothing here claims GCP-1285 owns,
   scopes or removes the operator grant.
-- Owner and ticket for this exception: **unassigned**, pending a pre-activation
-  review.
-- Before any activation, a risk and permission review of the operator grant is
-  required (including whether upstream supports a narrower role for this
-  deployment). No production risk acceptance or approval is claimed or implied.
+- Owner and ticket: GCP HCP GitOps workstream under **GCP-1286** (proposed, team
+  confirms). The review, the comparison against the three cluster roles the
+  current bootstrap installs, the GKE-availability breakdown of all 103 targets
+  and the risk position are in
+  `gcp-hcp-infra/docs/GCP-1286_CSV_RBAC_REVIEW.md`.
+- It is accepted as an interim exception: no supported narrower role exists, and
+  pruning the inert rules would not reduce the escalatory primitives. No
+  production risk acceptance beyond that statement is claimed or implied.
 
 ## Controller-dependency evidence (selected-release assumptions)
 
@@ -271,8 +274,12 @@ related-image index manifests matched their digests and passed GPG simple
 signing with Red Hat release key 2 (`567E347AD0044ADE55BA8A5F199E2F91FD431D51`);
 the bundle also passed a full `skopeo copy` under a `reject`-default policy with
 `matchRepoDigestOrExact`; a tampered manifest was rejected. Limits: platform
-child manifests/layers were not independently fetched, release-key-3 Sigstore
-signatures were not tested, and the charts here have no vendor signature.
+child manifests/layers were not independently fetched, and the charts here have
+no vendor signature. Release-key-3 Sigstore signatures **were** verified on
+2026-11-11 for the bundle and the four required images (every
+`registry.redhat.io` signature in each `sha256-<digest>.sig` artifact verifies,
+binds the approved digest, and is signed by release key 3); whether key 3 is
+*required* is B3, not something this repository decides.
 Manifests, signatures, key and logs are retained in
 `gcp-hcp-infra/docs/gcp-1286-evidence/`.
 
