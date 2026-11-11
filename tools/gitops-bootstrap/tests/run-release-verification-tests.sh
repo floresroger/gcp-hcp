@@ -395,5 +395,85 @@ assert_eq "ArgoCD CRD stores v1beta1" v1beta1 \
 assert_eq "ArgoCD CRD has no conversion webhook" none \
   "$(yq -r '.spec.conversion.strategy // "none"' "$ARGOCD_CRD")"
 
+# Privileged controller allowlist: every identity bound to a rendered
+# ClusterRole with escalate, bind, */*/* or the built-in cluster-admin role
+# must be listed in docs/privileged-controller-allowlist.yaml. The allowlist
+# is deliberately identity-only. The register that explains why each identity
+# is accepted lives in Confluence, not in this repository.
+PRIVILEGED_ALLOWLIST="${PRIVILEGED_ALLOWLIST:-$TOOL_DIR/../../docs/privileged-controller-allowlist.yaml}"
+OPERATOR_NAMESPACE="${OPERATOR_NAMESPACE:-gitops-operator}"
+helm template gitops-operator "$TOOL_DIR/chart-src/gitops-operator" \
+  --namespace "$OPERATOR_NAMESPACE" >"$TMP_DIR/operator-rbac.yaml"
+yq -o=json -I=0 '.' "$PRIVILEGED_ALLOWLIST" >"$TMP_DIR/allowlist.json"
+yq -o=json -I=0 '.' "$TOOL_DIR/../../bootstrap/argocd/install.yaml" >"$TMP_DIR/install.jsonl"
+yq -o=json -I=0 '.' "$TMP_DIR/operator-rbac.yaml" >"$TMP_DIR/operator.jsonl"
+
+python3 - "$TMP_DIR/allowlist.json" "$TMP_DIR/install.jsonl" "$TMP_DIR/operator.jsonl" \
+  >"$TMP_DIR/privileged.out" <<'PY'
+import json, sys
+
+allowlist_path, *manifest_paths = sys.argv[1:]
+allowlist = json.load(open(allowlist_path))
+entries = allowlist.get("entries") or []
+required = ("id", "identity", "kind")
+missing = sorted(
+    str(e.get("id") or e.get("identity") or "?")
+    for e in entries
+    if any(not e.get(field) for field in required) or "inRepo" not in e
+)
+registered = {e.get("identity") for e in entries if e.get("identity")}
+
+
+def privileged(rule):
+    verbs = rule.get("verbs") or []
+    if "escalate" in verbs or "bind" in verbs:
+        return True
+    if "*" in (rule.get("nonResourceURLs") or []) and "*" in verbs:
+        return True
+    groups = rule.get("apiGroups") or []
+    resources = rule.get("resources") or []
+    return "*" in groups and "*" in resources and "*" in verbs
+
+
+observed = {}
+for path in manifest_paths:
+    docs = [json.loads(line) for line in open(path)
+            if line.strip() and line.strip() != "null"]
+    roles = {
+        d["metadata"]["name"]
+        for d in docs
+        if d.get("kind") == "ClusterRole"
+        and any(privileged(r) for r in (d.get("rules") or []))
+    }
+    for d in docs:
+        if d.get("kind") != "ClusterRoleBinding":
+            continue
+        ref = (d.get("roleRef") or {}).get("name")
+        if ref not in roles and ref != "cluster-admin":
+            continue
+        for subject in d.get("subjects") or []:
+            if subject.get("kind") == "ServiceAccount":
+                identity = f"{subject.get('namespace', 'default')}/{subject['name']}"
+            else:
+                identity = f"{subject.get('kind')}:{subject['name']}"
+            observed[identity] = ref
+
+unregistered = sorted(set(observed) - registered)
+stale = sorted(
+    e["identity"]
+    for e in entries
+    if e.get("inRepo") and e.get("identity") not in observed
+)
+print("|".join(unregistered))
+print("|".join(stale))
+print("|".join(missing))
+PY
+
+{ IFS= read -r unregistered; IFS= read -r stale; IFS= read -r missing_fields; } \
+  <"$TMP_DIR/privileged.out"
+assert_eq "every privileged rendered controller is allowlisted" "" "$unregistered"
+assert_eq "every in-repo allowlist entry is still observed" "" "$stale"
+assert_eq "every allowlist entry has the required fields" "" "$missing_fields"
+
 echo "gitops-bootstrap release verification checks: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
