@@ -17,7 +17,8 @@ usage() {
 Usage: assemble.sh --type mc|region --global-project-id <project-id> \
          --output-dir <new-dir> [--shared-crds-output <new-file>] \
          [--pins FILE] [--image-allowlist FILE] [--template-dir DIR] \
-         [--namespace NAME] [--instance-name NAME] [--instance-namespace NAME]
+         [--namespace NAME] [--instance-name NAME] [--instance-namespace NAME] \
+         [--scoped-rbac --controller-cluster-role NAME --server-cluster-role NAME]
 
   --type                 mc or region. Anything else (global, unknown) is rejected.
   --global-project-id    Global GCP project ID holding the registry pull secret
@@ -34,7 +35,13 @@ Usage: assemble.sh --type mc|region --global-project-id <project-id> \
                           `argocd` (the operator would create an `argocd-cluster`
                           admin Secret colliding with the ESO metadata Secret).
   --instance-namespace   Argo CD instance namespace. Default: argocd.
-  --controller-cluster-role  Optional reviewed controller namespace role.
+  --controller-cluster-role  Reviewed controller ClusterRole. Required with
+                          --scoped-rbac.
+  --server-cluster-role  Reviewed Argo CD server ClusterRole. Requires
+                          --scoped-rbac.
+  --scoped-rbac          GCP-1286 scoped identity: pre-create both cluster
+                          roles, set defaultClusterScopedRoleDisabled, and
+                          narrow the manager ClusterRole to a resourceNames bind.
 EOF
 }
 
@@ -55,6 +62,8 @@ NAMESPACE="gitops-operator"
 INSTANCE_NAME="gitops"
 INSTANCE_NAMESPACE="argocd"
 CONTROLLER_CLUSTER_ROLE=""
+SERVER_CLUSTER_ROLE=""
+SCOPED_RBAC="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -69,6 +78,8 @@ while [[ $# -gt 0 ]]; do
     --instance-name) INSTANCE_NAME="$2"; shift 2 ;;
     --instance-namespace) INSTANCE_NAMESPACE="$2"; shift 2 ;;
     --controller-cluster-role) CONTROLLER_CLUSTER_ROLE="$2"; shift 2 ;;
+    --server-cluster-role) SERVER_CLUSTER_ROLE="$2"; shift 2 ;;
+    --scoped-rbac) SCOPED_RBAC="true"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1 (see --help)" ;;
   esac
@@ -117,6 +128,23 @@ done
 [[ "$INSTANCE_NAMESPACE" != "kube-system" && "$NAMESPACE" != "kube-system" && "$NAMESPACE" != "argocd" ]] \
   || die "operator namespace must not be argocd or kube-system"
 
+# Scoped RBAC (GCP-1286). Both cluster roles are declared by the bundle
+# templates from --instance-name, so a caller-supplied name can only confirm
+# that, never diverge from it. The manager keeps bind on exactly these names.
+SCOPED_CONTROLLER_ROLE="$INSTANCE_NAME-application-controller-interim-parity"
+SCOPED_SERVER_ROLE="$INSTANCE_NAME-argocd-server"
+if [[ "$SCOPED_RBAC" == "true" ]]; then
+  [[ -z "$CONTROLLER_CLUSTER_ROLE" || "$CONTROLLER_CLUSTER_ROLE" == "$SCOPED_CONTROLLER_ROLE" ]] \
+    || die "--controller-cluster-role must be $SCOPED_CONTROLLER_ROLE in scoped mode (the name is derived from --instance-name)"
+  [[ -z "$SERVER_CLUSTER_ROLE" || "$SERVER_CLUSTER_ROLE" == "$SCOPED_SERVER_ROLE" ]] \
+    || die "--server-cluster-role must be $SCOPED_SERVER_ROLE in scoped mode (the name is derived from --instance-name)"
+  CONTROLLER_CLUSTER_ROLE="$SCOPED_CONTROLLER_ROLE"
+  SERVER_CLUSTER_ROLE="$SCOPED_SERVER_ROLE"
+else
+  [[ -z "$SERVER_CLUSTER_ROLE" ]] \
+    || die "--server-cluster-role requires --scoped-rbac"
+fi
+
 [[ "$OUTPUT_DIR" != "/" ]] || die "refusing to use / as --output-dir"
 [[ ! -e "$OUTPUT_DIR" ]] || die "output directory already exists, refusing to overwrite: $OUTPUT_DIR"
 [[ -d "$(dirname -- "$OUTPUT_DIR")" ]] || die "parent of --output-dir does not exist"
@@ -131,12 +159,19 @@ fi
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gcp-1280-assemble.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+declare -a SCOPED_ARGS=()
+if [[ "$SCOPED_RBAC" == "true" ]]; then
+  SCOPED_ARGS=(--scoped-rbac)
+fi
+
 "$SCRIPT_DIR/render.sh" \
   --pins "$PINS_FILE" \
   --output-dir "$WORK_DIR/rendered" \
   --namespace "$NAMESPACE" \
   --instance-namespace "$INSTANCE_NAMESPACE" \
   --controller-cluster-role "$CONTROLLER_CLUSTER_ROLE" \
+  --server-cluster-role "$SERVER_CLUSTER_ROLE" \
+  ${SCOPED_ARGS[@]+"${SCOPED_ARGS[@]}"} \
   --service-account "$SERVICE_ACCOUNT" \
   --image-pull-secret-name "$PULL_SECRET_NAME" \
   --image-allowlist "$ALLOWLIST_FILE" >/dev/null
@@ -176,16 +211,28 @@ render_template() {
     -e "s|__TARGET_TYPE__|$TYPE|g" \
     -e "s|__REGISTRY_STORE_NAME__|$REGISTRY_STORE_NAME|g" \
     -e "s|__PULL_SECRET_NAME__|$PULL_SECRET_NAME|g" \
+    -e "s|__SERVICE_ACCOUNT__|$SERVICE_ACCOUNT|g" \
     -e "s|__MANAGER_DEPENDS_ON__|$MANAGER_DEPENDS_ON|g" \
     -e "s|__INSTANCE_DEPENDS_ON__|$INSTANCE_DEPENDS_ON|g" \
     "$TEMPLATE_DIR/$1.tmpl"
 }
-for t in registry networkpolicy gitops-instance controller-rbac kustomization; do
+for t in registry networkpolicy gitops-instance controller-rbac; do
   render_template "$t.yaml" > "$WORK_DIR/$t.yaml"
 done
+declare -a PLACEHOLDER_FILES=("$WORK_DIR"/registry.yaml "$WORK_DIR"/networkpolicy.yaml
+  "$WORK_DIR"/gitops-instance.yaml "$WORK_DIR"/controller-rbac.yaml)
+if [[ "$SCOPED_RBAC" == "true" ]]; then
+  # Scoped mode swaps in a kustomization that adds the bundle-owned roles and
+  # the ArgoCD switch. Vendor mode keeps the original template untouched.
+  render_template scoped-rbac.yaml > "$WORK_DIR/scoped-rbac.yaml"
+  render_template kustomization.scoped.yaml > "$WORK_DIR/kustomization.yaml"
+  PLACEHOLDER_FILES+=("$WORK_DIR"/scoped-rbac.yaml)
+else
+  render_template kustomization.yaml > "$WORK_DIR/kustomization.yaml"
+fi
+PLACEHOLDER_FILES+=("$WORK_DIR"/kustomization.yaml)
 rm -rf "$WORK_DIR/rendered"
-! grep -q '__[A-Z_]*__' "$WORK_DIR"/registry.yaml "$WORK_DIR"/networkpolicy.yaml "$WORK_DIR"/gitops-instance.yaml \
-  "$WORK_DIR"/controller-rbac.yaml "$WORK_DIR"/kustomization.yaml \
+! grep -q '__[A-Z_]*__' "${PLACEHOLDER_FILES[@]}" \
   || die "unreplaced template placeholder remains"
 
 kubectl kustomize "$WORK_DIR" > "$WORK_DIR/.preview.yaml"
@@ -212,6 +259,12 @@ expected_ids="$(
     printf 'ArgoCD/%s/%s\n' "$INSTANCE_NAMESPACE" "$INSTANCE_NAME"
     printf 'ClusterRole/-/%s-application-controller-interim-parity\n' "$INSTANCE_NAME"
     printf 'ClusterRoleBinding/-/%s-application-controller-interim-parity\n' "$INSTANCE_NAME"
+    if [[ "$SCOPED_RBAC" == "true" ]]; then
+      printf 'ClusterRole/-/%s-argocd-server\n' "$INSTANCE_NAME"
+      printf 'ClusterRoleBinding/-/%s-argocd-server\n' "$INSTANCE_NAME"
+      printf 'Role/%s/openshift-gitops-operator-namespaced-bind\n' "$INSTANCE_NAMESPACE"
+      printf 'RoleBinding/%s/openshift-gitops-operator-namespaced-bind\n' "$INSTANCE_NAMESPACE"
+    fi
   } | LC_ALL=C sort
 )"
 [[ "$actual_ids" == "$expected_ids" ]] || die "bundle identity set differs from the reviewed child inventory"
@@ -264,12 +317,41 @@ rm -f "$WORK_DIR/.graph.json"
 
 # Every seed setting is exactly the reviewed one (also checked against the
 # CRD schema by the test suite).
-jq -e --arg ns "$INSTANCE_NAMESPACE" '
+SCOPED_CR_VALUE="false"
+[[ "$SCOPED_RBAC" == "true" ]] && SCOPED_CR_VALUE="true"
+jq -e --arg ns "$INSTANCE_NAMESPACE" --argjson scoped "$SCOPED_CR_VALUE" '
   .[] | select(.kind == "ArgoCD")
   | .metadata.namespace == $ns and .spec.disableAdmin == true and .spec.usersAnonymousEnabled == false
     and .spec.resourceTrackingMethod == "annotation" and .spec.applicationSet.enabled == true
-    and .spec.notifications.enabled == true and .spec.sso.provider == "dex"' <<<"$PREVIEW_JSON" >/dev/null \
+    and .spec.notifications.enabled == true and .spec.sso.provider == "dex"
+    and ((.spec.defaultClusterScopedRoleDisabled // false) == $scoped)' <<<"$PREVIEW_JSON" >/dev/null \
   || die "ArgoCD seed settings differ from the reviewed seed"
+
+# Scoped mode: the namespaced bind Role is bind-on-roles only, and the manager
+# ClusterRole keeps exactly one bind, limited to the two roles this bundle owns.
+if [[ "$SCOPED_RBAC" == "true" ]]; then
+  jq -e --arg ns "$INSTANCE_NAMESPACE" --arg sa "$SERVICE_ACCOUNT" --arg opns "$NAMESPACE" '
+    [ .[] | select(.kind == "Role" and .metadata.name == "openshift-gitops-operator-namespaced-bind") ] as $roles
+    | [ .[] | select(.kind == "RoleBinding" and .metadata.name == "openshift-gitops-operator-namespaced-bind") ] as $rbs
+    | ($roles | length) == 1 and ($rbs | length) == 1
+      and $roles[0].metadata.namespace == $ns
+      and $roles[0].rules == [{apiGroups: ["rbac.authorization.k8s.io"], resources: ["roles"], verbs: ["bind"]}]
+      and $rbs[0].metadata.namespace == $ns
+      and $rbs[0].roleRef == {apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "openshift-gitops-operator-namespaced-bind"}
+      and $rbs[0].subjects == [{kind: "ServiceAccount", name: $sa, namespace: $opns}]' <<<"$PREVIEW_JSON" >/dev/null \
+    || die "the namespaced bind Role/RoleBinding is not the reviewed bind-on-roles grant"
+
+  jq -e --arg c "$CONTROLLER_CLUSTER_ROLE" --arg s "$SERVER_CLUSTER_ROLE" '
+    [ .[] | select(.kind == "ClusterRole" and .metadata.name == "openshift-gitops-operator-controller-manager") ] as $cr
+    | [ ($cr[0].rules // [])[] | select((.verbs // []) | index("bind")) ] as $b
+    | ($cr | length) == 1
+      and ([ ($cr[0].rules // [])[] | select((.verbs // []) | index("escalate")) ] | length) == 0
+      and ($b | length) == 1
+      and ($b[0].resourceNames | sort) == ([$c, $s] | sort)
+      and ($b[0].verbs == ["bind"])
+      and ($b[0].resources == ["clusterroles"])' <<<"$PREVIEW_JSON" >/dev/null \
+    || die "the manager ClusterRole is not the reviewed scoped rule set"
+fi
 
 [[ ! -e "$OUTPUT_DIR" ]] || die "output directory appeared during assembly: $OUTPUT_DIR"
 if [[ -n "$SHARED_CRDS_OUTPUT" ]]; then

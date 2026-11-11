@@ -9,9 +9,10 @@
 #
 # This file is NOT a support or certification statement. `support.approval`
 # stays `pending` until GitOps engineering/QE supplies the GKE scope (B1b) and
-# the installation/packaging and trust decisions are recorded (B2/B3). The
-# operator-wide CSV RBAC exception needs its own owner/risk review (B4) before
-# any activation. See `docs/GCP-1286_PLAN.md` on the same gcp-hcp-infra branch.
+# the installation/packaging and trust decisions are recorded (B2/B3). B4 is
+# decided as a scoped operator identity (see the installation.deviations entry
+# and the GCP-1286 CSV/RBAC review); section B is its runtime proof. See
+# `docs/GCP-1286_PLAN.md` on the same gcp-hcp-infra branch.
 #
 # Guidance received 2026-11-11 from the GitOps engineering channel (their AI
 # assistant, self-labelled "check for accuracy") is recorded in the `guidance`
@@ -83,10 +84,11 @@ spec:
         path: charts/gitops-operator-0.1.0.tgz
         version: "0.1.0"
         appVersion: "1.22.2"
-        checksum: "sha256:694b209eddc8b16b31e1d0bed2fbee2a8457774d88b8e76ace851c7f0bcd1010"
+        checksum: "sha256:143d96ce2cebaaee2c4abb6cce5b8575beed9ad18cc091e1d5de4db7d1622b13"
     deviations:
       - "ArgoCD CRD is v1beta1-only with no conversion webhook; ENABLE_CONVERSION_WEBHOOK=false."
       - "Manager resources are an untuned local budget, not the CSV's resources: {}."
+      - "Scoped operator identity (B4), off by default in the chart and on in the GKE bundles: spec.defaultClusterScopedRoleDisabled=true, CONTROLLER_CLUSTER_ROLE and SERVER_CLUSTER_ROLE set to bundle-owned ClusterRoles, and the manager ClusterRole drops unqualified bind and escalate in favour of one bind limited by resourceNames to those two roles. The vendor rule set stays the chart default and the rule-for-rule baseline."
     guidance:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"

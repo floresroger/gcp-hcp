@@ -560,6 +560,12 @@ assert_eq "controller role is bound to the manager env" "gitops-hcp-controller-l
 default_role_count="$(yq eval -o=json -I=0 '.' "$OUT1/operator.yaml" | jq -s '[.[] | select(.kind == "Deployment") | .spec.template.spec.containers[] | .env[] | select(.name == "CONTROLLER_CLUSTER_ROLE")] | length')"
 assert_eq "default output adds no controller role override" "0" "$default_role_count"
 expect_failure "invalid controller role fails closed" "invalid --controller-cluster-role" "$TMP_DIR/bad-controller-role.log" --pins "$TMP_DIR/good-pins.yaml" --output-dir "$TMP_DIR/bad-controller-role" "${COMMON_ARGS[@]}" --controller-cluster-role bad/role
+expect_failure "--scoped-rbac without both role names fails closed" "requires --controller-cluster-role and --server-cluster-role" \
+  "$TMP_DIR/scoped-missing-roles.log" --pins "$TMP_DIR/good-pins.yaml" --output-dir "$TMP_DIR/scoped-missing-roles" "${COMMON_ARGS[@]}" --scoped-rbac
+expect_failure "--scoped-rbac with only a controller role fails closed" "requires --controller-cluster-role and --server-cluster-role" \
+  "$TMP_DIR/scoped-one-role.log" --pins "$TMP_DIR/good-pins.yaml" --output-dir "$TMP_DIR/scoped-one-role" "${COMMON_ARGS[@]}" --scoped-rbac --controller-cluster-role gitops-controller
+expect_failure "--server-cluster-role without --scoped-rbac fails closed" "requires --scoped-rbac" \
+  "$TMP_DIR/orphan-server-role.log" --pins "$TMP_DIR/good-pins.yaml" --output-dir "$TMP_DIR/orphan-server-role" "${COMMON_ARGS[@]}" --server-cluster-role gitops-server
 
 # Long archive listings must be drained with pipefail enabled (GNU tar SIGPIPE).
 mkdir -p "$TMP_DIR/large-chart"

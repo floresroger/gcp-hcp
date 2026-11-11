@@ -311,6 +311,53 @@ SecretStore/gitops-operator/gitops-registry-bootstrap-gcpsm
 ServiceAccount/gitops-operator/openshift-gitops-operator-controller-manager
 EOF
 check "child inventory is exactly the 18 reviewed identities" bash -c "diff <(sed -n '1,\$p' '$T/expected-ids.txt' | LC_ALL=C sort) <(jq -r '.[] | [.kind, (.metadata.namespace // \"-\"), .metadata.name] | join(\"/\")' '$T/mc-built.json' | LC_ALL=C sort)"
+
+# ------------------------------------------------- scoped RBAC variant (GCP-1286)
+check "assemble mc with --scoped-rbac" "$TOOL/assemble.sh" --type mc --global-project-id "$SYN_PROJECT" --output-dir "$T/scoped" --scoped-rbac
+check "scoped assembly is deterministic (twice, byte-identical)" bash -c "'$TOOL/assemble.sh' --type mc --global-project-id $SYN_PROJECT --output-dir '$T/scoped2' --scoped-rbac >/dev/null && diff -r '$T/scoped' '$T/scoped2'"
+expect_fail "a controller role that diverges from the bundle-owned name is rejected" "must be gitops-application-controller-interim-parity" \
+  "$TOOL/assemble.sh" --type mc --global-project-id "$SYN_PROJECT" --output-dir "$T/scoped-bad-controller" --scoped-rbac --controller-cluster-role other-controller
+expect_fail "a server role that diverges from the bundle-owned name is rejected" "must be gitops-argocd-server" \
+  "$TOOL/assemble.sh" --type mc --global-project-id "$SYN_PROJECT" --output-dir "$T/scoped-bad-server" --scoped-rbac --server-cluster-role other-server
+expect_fail "--server-cluster-role without --scoped-rbac is rejected" "requires --scoped-rbac" \
+  "$TOOL/assemble.sh" --type mc --global-project-id "$SYN_PROJECT" --output-dir "$T/scoped-orphan-server" --server-cluster-role gitops-argocd-server
+check "no scoped bundle was published by any rejected assembly" bash -c "[[ ! -e '$T/scoped-bad-controller' && ! -e '$T/scoped-bad-server' && ! -e '$T/scoped-orphan-server' ]]"
+
+kubectl kustomize "$T/scoped" > "$T/scoped-built.yaml" 2>/dev/null
+j "$T/scoped-built.yaml" > "$T/scoped-built.json"
+check "scoped bundle adds exactly the two bundle-owned roles and their bindings" \
+  bash -c "diff <({ cat '$T/expected-ids.txt'; printf 'ClusterRole/-/gitops-argocd-server\nClusterRoleBinding/-/gitops-argocd-server\nRole/argocd/openshift-gitops-operator-namespaced-bind\nRoleBinding/argocd/openshift-gitops-operator-namespaced-bind\n'; } | LC_ALL=C sort) <(jq -r '.[] | [.kind, (.metadata.namespace // \"-\"), .metadata.name] | join(\"/\")' '$T/scoped-built.json' | LC_ALL=C sort)"
+check "scoped manager ClusterRole is the vendor set minus bind/escalate plus one resourceNames bind" \
+  bash -c "jq -e --slurpfile v '$T/mc-built.json' '
+    ([.[] | select(.kind == \"ClusterRole\" and .metadata.name == \"openshift-gitops-operator-controller-manager\")][0]) as \$s
+    | ([ \$v[0][] | select(.kind == \"ClusterRole\" and .metadata.name == \"openshift-gitops-operator-controller-manager\")][0]) as \$m
+    | ([\$m.rules[] | .verbs = ((.verbs // []) - [\"bind\", \"escalate\"]) | select((.verbs | length) > 0)]) as \$expected
+    | (\$s.rules[0:-1] == \$expected)
+      and (\$s.rules[-1] == {apiGroups: [\"rbac.authorization.k8s.io\"], resources: [\"clusterroles\"], verbs: [\"bind\"], resourceNames: [\"gitops-application-controller-interim-parity\", \"gitops-argocd-server\"]})' '$T/scoped-built.json'"
+check "scoped manager env names both bundle-owned roles" \
+  bash -c "jq -e '[.[] | select(.kind == \"Deployment\") | .spec.template.spec.containers[] | select(.name == \"manager\") | .env[] | select(.name == \"CONTROLLER_CLUSTER_ROLE\" or .name == \"SERVER_CLUSTER_ROLE\") | .name + \"=\" + .value] | sort == [\"CONTROLLER_CLUSTER_ROLE=gitops-application-controller-interim-parity\", \"SERVER_CLUSTER_ROLE=gitops-argocd-server\"]' '$T/scoped-built.json'"
+check "scoped ArgoCD seed enables defaultClusterScopedRoleDisabled" \
+  bash -c "jq -e '[.[] | select(.kind == \"ArgoCD\")][0].spec.defaultClusterScopedRoleDisabled == true' '$T/scoped-built.json'"
+check "vendor ArgoCD seed does not set defaultClusterScopedRoleDisabled" \
+  bash -c "jq -e '([.[] | select(.kind == \"ArgoCD\")][0].spec | has(\"defaultClusterScopedRoleDisabled\") | not)' '$T/mc-built.json'"
+check "scoped server ClusterRole is the reviewed union of the operator's server policies" \
+  bash -c "jq -e '[.[] | select(.kind == \"ClusterRole\" and .metadata.name == \"gitops-argocd-server\")][0].rules == [
+    {apiGroups: [\"*\"], resources: [\"*\"], verbs: [\"get\", \"patch\", \"delete\"]},
+    {apiGroups: [\"\"], resources: [\"secrets\", \"configmaps\"], verbs: [\"create\", \"get\", \"list\", \"watch\", \"update\", \"patch\", \"delete\"]},
+    {apiGroups: [\"argoproj.io\"], resources: [\"applications\", \"applicationsets\", \"appprojects\"], verbs: [\"create\", \"get\", \"list\", \"watch\", \"update\", \"delete\", \"patch\"]},
+    {apiGroups: [\"\"], resources: [\"events\"], verbs: [\"create\", \"list\"]},
+    {apiGroups: [\"batch\"], resources: [\"jobs\", \"cronjobs\", \"cronjobs/finalizers\"], verbs: [\"create\", \"update\"]}]' '$T/scoped-built.json'"
+check "scoped server ClusterRoleBinding targets the server ServiceAccount only" \
+  bash -c "jq -e '([.[] | select(.kind == \"ClusterRoleBinding\" and .metadata.name == \"gitops-argocd-server\")][0]) | .roleRef == {apiGroup: \"rbac.authorization.k8s.io\", kind: \"ClusterRole\", name: \"gitops-argocd-server\"} and .subjects == [{kind: \"ServiceAccount\", name: \"gitops-argocd-server\", namespace: \"argocd\"}]' '$T/scoped-built.json'"
+check "scoped namespaced bind Role is bind-on-roles only, bound to the manager ServiceAccount in argocd" \
+  bash -c "jq -e '
+    ([.[] | select(.kind == \"Role\" and .metadata.name == \"openshift-gitops-operator-namespaced-bind\" and .metadata.namespace == \"argocd\")][0].rules
+      == [{apiGroups: [\"rbac.authorization.k8s.io\"], resources: [\"roles\"], verbs: [\"bind\"]}])
+    and (([.[] | select(.kind == \"RoleBinding\" and .metadata.name == \"openshift-gitops-operator-namespaced-bind\" and .metadata.namespace == \"argocd\")][0])
+      | .roleRef == {apiGroup: \"rbac.authorization.k8s.io\", kind: \"Role\", name: \"openshift-gitops-operator-namespaced-bind\"}
+        and .subjects == [{kind: \"ServiceAccount\", name: \"openshift-gitops-operator-controller-manager\", namespace: \"gitops-operator\"}])' '$T/scoped-built.json'"
+check "scoped bundle still declares no Secret" \
+  bash -c "jq -e 'all(.[]; .kind != \"Secret\")' '$T/scoped-built.json'"
 check "MC and region both carry exactly one ingress-only default-deny NetworkPolicy (no Egress isolation, no allow rules)" \
   bash -c "for t in mc region; do kubectl kustomize '$T/'\$t | yq eval -o=json -I=0 '.' - | jq -se '[.[] | select(.kind==\"NetworkPolicy\")] | length == 1 and .[0].metadata.name == \"operator-default-deny-ingress\" and .[0].metadata.namespace == \"gitops-operator\" and .[0].spec == {podSelector:{}, policyTypes:[\"Ingress\"], ingress:[]}' >/dev/null || exit 1; done"
 check "the empty podSelector selects the manager: same namespace, not hostNetwork, no other NetworkPolicy" \

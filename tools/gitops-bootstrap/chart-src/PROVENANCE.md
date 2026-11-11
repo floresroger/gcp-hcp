@@ -80,7 +80,7 @@ floating tag and no fallback registry).
 | Archive | Version / appVersion | SHA256 (pinned in `../pins.yaml`) |
 | --- | --- | --- |
 | `../charts/gitops-operator-crds-0.1.0.tgz` | `0.1.0` / `1.22.2` | `32bbf0742652160b3aaa953036f6bf933a45b79c55aaed9e9fdf13b9fdd9ec9b` |
-| `../charts/gitops-operator-0.1.0.tgz` | `0.1.0` / `1.22.2` | `694b209eddc8b16b31e1d0bed2fbee2a8457774d88b8e76ace851c7f0bcd1010` |
+| `../charts/gitops-operator-0.1.0.tgz` | `0.1.0` / `1.22.2` | `143d96ce2cebaaee2c4abb6cce5b8575beed9ad18cc091e1d5de4db7d1622b13` |
 
 `0.1.0` is a truthful local packaging version, distinct from the official
 appVersion. The archives have no registry/OCI manifest digest of their own; the
@@ -188,8 +188,8 @@ instance namespace. No runtime closure is claimed.
 ## Official operator RBAC exception (separate from the controller grant above)
 
 The generated `gitops-operator/templates/rbac.yaml` carries the official CSV's
-operator ClusterRole unchanged (rule-for-rule parity, asserted by the offline
-tests). Among those rules (about lines 408-424) it grants
+operator ClusterRole rule set as its default (rule-for-rule parity, asserted by
+the offline tests). Among those rules (about lines 408-424) it grants
 `rbac.authorization.k8s.io` resources `*`, `clusterroles` and `clusterrolebindings`
 the verbs `bind`, `create`, `delete`, `deletecollection`, `escalate`, `get`,
 `list`, `patch`, `update` and `watch`, and the Role/RoleBinding rule that follows
@@ -207,20 +207,25 @@ exactly the verbs that waive that check:
 
 Status and boundaries:
 
-- It is retained unchanged **for upstream CSV parity in inactive engineering
-  artifacts**. No rule or binding was redesigned or narrowed here.
+- The vendor rule set is the chart default and stays rule-for-rule equal to the
+  CSV, so inactive engineering artifacts still show what upstream ships.
+- The chart also carries an opt-in `scopedRbac` mode, used by the GKE bundles:
+  the unqualified `bind` and `escalate` are removed and one `bind` limited by
+  `resourceNames` to two bundle-owned ClusterRoles replaces them, with the
+  operator pointed at those roles. The design, its limits and the residual risk
+  are recorded in `gcp-hcp-infra/docs/GCP-1286_CSV_RBAC_REVIEW.md`; it is not a
+  support statement and it has no runtime proof yet.
 - It is a **different exception** from the additive Argo CD application
   controller grant in the previous section. GCP-1285 is the exit criterion for
   that application-controller grant **only**; nothing here claims GCP-1285 owns,
   scopes or removes the operator grant.
-- Owner and ticket: GCP HCP GitOps workstream under **GCP-1286** (proposed, team
-  confirms). The review, the comparison against the three cluster roles the
-  current bootstrap installs, the GKE-availability breakdown of all 103 targets
-  and the risk position are in
+- Owner and ticket: GCP HCP GitOps workstream under **GCP-1286**. The review, the
+  comparison against the three cluster roles the current bootstrap installs, the
+  GKE-availability breakdown of all 102 API targets and the risk position are in
   `gcp-hcp-infra/docs/GCP-1286_CSV_RBAC_REVIEW.md`.
-- It is accepted as an interim exception: no supported narrower role exists, and
-  pruning the inert rules would not reduce the escalatory primitives. No
-  production risk acceptance beyond that statement is claimed or implied.
+- No supported narrower role exists in this release, so the scoped mode is our
+  own role design rather than a vendor one. No production risk acceptance
+  beyond that statement is claimed or implied.
 
 ## Controller-dependency evidence (selected-release assumptions)
 
