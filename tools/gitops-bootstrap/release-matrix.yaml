@@ -93,10 +93,17 @@ spec:
         # Recorded 2026-11-11 for the B1 request: the target is the GKE version
         # the GCP HCP environments already run, not a separately chosen one.
         version: "1.35.8-gke.1796000"
+        nodeVersion: "1.35.8-gke.1796000"
+        channel: REGULAR
         autopilot: true
-        observedOn: [gcp-hcp-int-global-gke, gcp-hcp-stg-global-gke]
-        source: "gcloud container clusters list, this account"
-        gap: "MC/region projects were not readable by this account; confirm the same version there before treating it as the validation baseline."
+        observedOn:
+          - int-mgt-us-c1-yjiv  # integration management cluster, us-central1
+          - int-reg-us-c1-nkcw  # integration region, us-central1
+          - stg-mgt-us-w1-zkpf  # stage management cluster, us-west1
+          - stg-reg-us-w1-cvxu  # stage region, us-west1
+          - gcp-hcp-int-global  # us-central1
+          - gcp-hcp-stg-global  # us-west1
+        source: "gcloud container clusters list, 2026-11-11; all six clusters identical"
       architectures: unapproved
       techPreview: "Source Hydrator and GitOps Promoter are Technology Preview; both are out of scope here."
     note: "No GKE support, SLA or Tech Preview tier for the installation as a whole is claimed."
