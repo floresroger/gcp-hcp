@@ -8,6 +8,6 @@ spec:
   sourceType: git
   git:
     repo: https://github.com/floresroger/gcp-hcp.git
-    revision: BUNDLE_COMMIT_SHA
+    revision: 2f728e69db178c235e73345a42b5781395653e8a
     dir: bundles/gcp1286/dev/rflores-gcp1286/us-central1/mc
     auth: none
