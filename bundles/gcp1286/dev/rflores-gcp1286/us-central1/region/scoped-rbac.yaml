@@ -1,0 +1,100 @@
+# GCP-1286 scoped identity, bundle side.
+#
+# The operator's spec.defaultClusterScopedRoleDisabled stops it creating the
+# cluster-scoped controller and server ClusterRoles. CONTROLLER_CLUSTER_ROLE and
+# SERVER_CLUSTER_ROLE point the operator at roles supplied here instead, so the
+# operator creates no ClusterRole and no ClusterRoleBinding of its own.
+#
+# Controller role: the interim-parity role in controller-rbac.yaml, which is
+# already bound to the controller ServiceAccount by this bundle.
+# Server role: declared below.
+#
+# The server rule set is the UNION of the operator's two server policies for the
+# reviewed seed (web terminal off), pinned source argocd-operator a213c171036a:
+#   policyRuleForServer            (namespaced Role, applied through the
+#                                   operator's namespaced RoleBinding in the
+#                                   instance namespace)
+#   policyRuleForServerClusterRole (cluster-scoped ClusterRole, applied through
+#                                   the ClusterRoleBinding below)
+# It is a copy, not a superset. Any operator update that changes either policy
+# must be diffed against this file before scoped mode is used again.
+#
+# The manager keeps no escalate verb. That is sufficient only because this
+# bundle targets GKE: the operator appends an OpenShift restricted-SCC rule to
+# its dex/redis Roles only when the OpenShift Config API is present, and the
+# manager CSV rule set has no security.openshift.io grant. Do not reuse scoped
+# mode on OpenShift without adding an escalate path for those Roles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gitops-argocd-server
+  labels:
+    app.kubernetes.io/part-of: gke-bootstrap
+    gke-bootstrap/target-type: region
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications", "applicationsets", "appprojects"]
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs", "cronjobs/finalizers"]
+    verbs: ["create", "update"]
+---
+# The operator does not create this binding in custom-role mode; the bundle must.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gitops-argocd-server
+  labels:
+    app.kubernetes.io/part-of: gke-bootstrap
+    gke-bootstrap/target-type: region
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gitops-argocd-server
+subjects:
+  - kind: ServiceAccount
+    name: gitops-argocd-server
+    namespace: argocd
+---
+# The only bind the manager keeps in the instance namespace. The operator still
+# creates the dex, redis, redis-ha and commit-server Roles there and must bind
+# them; without this it cannot finish reconcile. It is namespaced, so it cannot
+# reach any other namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openshift-gitops-operator-namespaced-bind
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gke-bootstrap
+    gke-bootstrap/target-type: region
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    verbs: ["bind"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openshift-gitops-operator-namespaced-bind
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gke-bootstrap
+    gke-bootstrap/target-type: region
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openshift-gitops-operator-namespaced-bind
+subjects:
+  - kind: ServiceAccount
+    name: openshift-gitops-operator-controller-manager
+    namespace: gitops-operator
