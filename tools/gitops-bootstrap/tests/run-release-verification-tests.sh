@@ -357,7 +357,8 @@ expect_fail "entry point requires an auth file for a fresh copy" "auth file miss
   "$WRAP" --matrix "$MATRIX" --image manager --key-file "$KEY" --workdir "$TMP_DIR/work6"
 
 # Matrix integrity: the 15 references must match the reviewed allowlist, every
-# entry must state why it is in or out, and no approval may be pre-filled.
+# entry must state why it is in or out, support approval must not be pre-filled,
+# and any installation acceptance must name its approver.
 matrix_refs="$(yq -r '[.spec.components.required[], .spec.components.conditional[], .spec.components.excluded[]] | .[].reference' "$MATRIX" | sort)"
 allow_refs="$(grep -v '^#' "$TOOL_DIR/allowed-images.txt" | grep -v '^[[:space:]]*$' | sort)"
 if [[ "$matrix_refs" == "$allow_refs" ]]; then
@@ -371,7 +372,19 @@ assert_eq "every excluded component states a reason" 0 "$missing_reason"
 missing_inclusion="$(yq -r '[.spec.components.required[] | select((.inclusionReason // "") == "")] | length' "$MATRIX")"
 assert_eq "every required component states an inclusion reason" 0 "$missing_inclusion"
 assert_eq "support approval is not pre-filled" pending "$(yq -r '.spec.support.approval' "$MATRIX")"
-assert_eq "installation approval is not pre-filled" pending "$(yq -r '.spec.installation.approval' "$MATRIX")"
+assert_eq "installation approval is recorded" approved "$(yq -r '.spec.installation.approval' "$MATRIX")"
+installation_approver="$(yq -r '.spec.installation.approvedBy // ""' "$MATRIX")"
+if [[ -n "$installation_approver" ]]; then
+  ok "installation approval names an approver"
+else
+  bad "installation approval has no approver"
+fi
+installation_scope="$(yq -r '.spec.installation.approvalScope // ""' "$MATRIX")"
+if [[ -n "$installation_scope" ]]; then
+  ok "installation approval states its scope"
+else
+  bad "installation approval has no scope"
+fi
 
 # Contract checks: the matrix must cover exactly the CSV's image references
 # (manager image plus RELATED_IMAGE/* env) and the packaged CRDs must match the

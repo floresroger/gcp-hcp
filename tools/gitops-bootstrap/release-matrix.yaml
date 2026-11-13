@@ -8,15 +8,19 @@
 # before relying on it; do not hand-edit digests.
 #
 # This file is NOT a support or certification statement. `support.approval`
-# stays `pending` until GitOps engineering/QE supplies the GKE scope (B1b) and
-# the installation/packaging and trust decisions are recorded (B2/B3). B4 is
+# stays `pending` until GitOps engineering/QE supplies the GKE scope (B1b).
+# Installation/packaging is accepted for this bounded validation by a named
+# GitOps engineer (B2) and the trust decisions are recorded (B3); that acceptance
+# is scoped to validation and is not a support or certification claim. B4 is
 # decided as a scoped operator identity (see the installation.deviations entry
 # and the GCP-1286 CSV/RBAC review); section B is its runtime proof. See
 # `docs/GCP-1286_PLAN.md` on the same gcp-hcp-infra branch.
 #
 # Guidance received 2026-11-11 from the GitOps engineering channel (their AI
 # assistant, self-labelled "check for accuracy") is recorded in the `guidance`
-# fields below. It is not a human decision record, so no approval changed.
+# fields below. It is not a human decision record. The 2026-11-13 acceptance
+# from Anand Singh is recorded separately in `installation.approval` and
+# `installation.guidance.followUp`.
 apiVersion: gcp-hcp.io/v1alpha1
 kind: GitOpsReleaseMatrix
 metadata:
@@ -72,8 +76,10 @@ spec:
     note: "Presence in an index is not GitOps QE certification for GKE. The certified/approved set is B1."
   installation:
     method: local_helm_charts
-    approval: pending
-    blockedBy: [B2]
+    approval: approved
+    approvedBy: "Anand Singh (OpenShift GitOps engineering), Slack reply relayed by Roger on 2026-11-13"
+    approvalScope: "Pre-certification validation on GKE only. Not a support, certification or vendor signature statement."
+    blockedBy: []
     charts:
       crds:
         path: charts/gitops-operator-crds-0.1.0.tgz
@@ -96,13 +102,13 @@ spec:
       verified: "Packaged argocds CRD has no spec.conversion key and a single v1beta1 served/storage version (run-step2-tests.sh:134,333; run-release-verification-tests.sh:395)."
       followUp:
         received: "2026-11-13"
-        source: "Anand Singh, GITOPS-10648 thread (chart author)"
+        source: "Anand Singh, Slack reply relayed by Roger (chart author)"
         states: "Both charts were repackaged from the v4.22 catalog: argocds trimmed to v1beta1 with spec.conversion removed, ENABLE_CONVERSION_WEBHOOK=false, gitopsservices.pipelines.openshift.io CRD removed, Helm install. Republished tags: 1.22.2 OCI manifest sha256:85ab6beee148511bc9c44948c611ab47fea005bdbd2d8ab4db5278925baa59e4, 1.22.3 sha256:457391a3798708e0999aa812533cf86471968de97299128bc9f6e1d90185ed2e."
-        effect: "The packaging method is confirmed in writing and matches this bundle, but the reply does not cover this specific chart set. Installation approval stays pending until the chart set is accepted or a self-acceptance with Roger as acceptor is recorded. Still not a support or certification statement."
+        effect: "The packaging method is confirmed in writing, the author republished both charts to match, and he then accepted this bundle's chart set for the pre-certification validation. Installation approval is recorded as approved with the approver and scope. Still not a support or certification statement."
     note: "Local chart packaging, not vendor-published; adopting or replacing it is B2."
   support:
     approval: pending
-    blockedBy: [B1b, B2]
+    blockedBy: [B1b]
     guidance:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
