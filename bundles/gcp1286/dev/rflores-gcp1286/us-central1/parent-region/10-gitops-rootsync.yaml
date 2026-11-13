@@ -8,6 +8,6 @@ spec:
   sourceType: git
   git:
     repo: https://github.com/floresroger/gcp-hcp.git
-    revision: 2f728e69db178c235e73345a42b5781395653e8a
+    revision: 04f6e7d249352ca7813adccd3fda9e74ae8da113
     dir: bundles/gcp1286/dev/rflores-gcp1286/us-central1/region
     auth: none
