@@ -94,7 +94,11 @@ spec:
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
       states: "Local packaging is acceptable for validation; no official vendor chart exists for 1.22.x and none will be produced before 1.23; the approach matches the GITOPS-10648 xKS path (strip v1alpha1 and spec.conversion, ENABLE_CONVERSION_WEBHOOK=false, Helm install)."
       verified: "Packaged argocds CRD has no spec.conversion key and a single v1beta1 served/storage version (run-step2-tests.sh:134,333; run-release-verification-tests.sh:395)."
-      effect: "No human has confirmed in writing and the reply author could not open gcp-hcp#166, so installation approval stays pending."
+      followUp:
+        received: "2026-11-13"
+        source: "Anand Singh, GITOPS-10648 thread (chart author)"
+        states: "Both charts were repackaged from the v4.22 catalog: argocds trimmed to v1beta1 with spec.conversion removed, ENABLE_CONVERSION_WEBHOOK=false, gitopsservices.pipelines.openshift.io CRD removed, Helm install. Republished tags: 1.22.2 OCI manifest sha256:85ab6beee148511bc9c44948c611ab47fea005bdbd2d8ab4db5278925baa59e4, 1.22.3 sha256:457391a3798708e0999aa812533cf86471968de97299128bc9f6e1d90185ed2e."
+        effect: "The packaging method is confirmed in writing and matches this bundle, but the reply does not cover this specific chart set. Installation approval stays pending until the chart set is accepted or a self-acceptance with Roger as acceptor is recorded. Still not a support or certification statement."
     note: "Local chart packaging, not vendor-published; adopting or replacing it is B2."
   support:
     approval: pending
