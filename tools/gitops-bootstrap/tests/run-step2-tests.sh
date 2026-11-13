@@ -327,8 +327,8 @@ check "no scoped bundle was published by any rejected assembly" bash -c "[[ ! -e
 
 kubectl kustomize "$T/scoped" > "$T/scoped-built.yaml" 2>/dev/null
 j "$T/scoped-built.yaml" > "$T/scoped-built.json"
-check "scoped bundle adds exactly the two bundle-owned roles and their bindings" \
-  bash -c "diff <({ cat '$T/expected-ids.txt'; printf 'ClusterRole/-/gitops-argocd-server\nClusterRoleBinding/-/gitops-argocd-server\nRole/argocd/openshift-gitops-operator-namespaced-bind\nRoleBinding/argocd/openshift-gitops-operator-namespaced-bind\n'; } | LC_ALL=C sort) <(jq -r '.[] | [.kind, (.metadata.namespace // \"-\"), .metadata.name] | join(\"/\")' '$T/scoped-built.json' | LC_ALL=C sort)"
+check "scoped bundle adds exactly the bundle-owned roles and their bindings" \
+  bash -c "diff <({ cat '$T/expected-ids.txt'; printf 'ClusterRole/-/gitops-argocd-server\nClusterRoleBinding/-/gitops-argocd-server\nRole/argocd/openshift-gitops-operator-namespaced-bind\nRoleBinding/argocd/openshift-gitops-operator-namespaced-bind\nRole/argocd/openshift-gitops-operator-applicationset-grant\nRoleBinding/argocd/openshift-gitops-operator-applicationset-grant\nClusterRole/-/gitops-argocd-argocd-applicationset-controller\nClusterRoleBinding/-/gitops-argocd-argocd-applicationset-controller\n'; } | LC_ALL=C sort) <(jq -r '.[] | [.kind, (.metadata.namespace // \"-\"), .metadata.name] | join(\"/\")' '$T/scoped-built.json' | LC_ALL=C sort)"
 check "scoped manager ClusterRole is the vendor set minus bind/escalate plus one resourceNames bind" \
   bash -c "jq -e --slurpfile v '$T/mc-built.json' '
     ([.[] | select(.kind == \"ClusterRole\" and .metadata.name == \"openshift-gitops-operator-controller-manager\")][0]) as \$s
@@ -358,6 +358,35 @@ check "scoped namespaced bind Role is bind-on-roles only, bound to the manager S
     and (([.[] | select(.kind == \"RoleBinding\" and .metadata.name == \"openshift-gitops-operator-namespaced-bind\" and .metadata.namespace == \"argocd\")][0])
       | .roleRef == {apiGroup: \"rbac.authorization.k8s.io\", kind: \"Role\", name: \"openshift-gitops-operator-namespaced-bind\"}
         and .subjects == [{kind: \"ServiceAccount\", name: \"openshift-gitops-operator-controller-manager\", namespace: \"gitops-operator\"}])' '$T/scoped-built.json'"
+check "scoped ApplicationSet operator grant is the reviewed namespaced rule set" \
+  bash -c "jq -e '
+    ([.[] | select(.kind == \"Role\" and .metadata.name == \"openshift-gitops-operator-applicationset-grant\" and .metadata.namespace == \"argocd\")][0].rules
+      == [
+        {apiGroups: [\"argoproj.io\"], resources: [\"applications\", \"applicationsets\", \"applicationsets/finalizers\"], verbs: [\"create\", \"delete\", \"get\", \"list\", \"patch\", \"update\", \"watch\"]},
+        {apiGroups: [\"argoproj.io\"], resources: [\"applicationsets/status\"], verbs: [\"get\", \"patch\", \"update\"]},
+        {apiGroups: [\"argoproj.io\"], resources: [\"appprojects\"], verbs: [\"get\", \"list\", \"watch\"]},
+        {apiGroups: [\"\"], resources: [\"events\"], verbs: [\"create\", \"get\", \"list\", \"patch\", \"watch\"]},
+        {apiGroups: [\"\"], resources: [\"configmaps\"], verbs: [\"create\", \"update\", \"delete\", \"get\", \"list\", \"patch\", \"watch\"]},
+        {apiGroups: [\"\"], resources: [\"secrets\"], verbs: [\"get\", \"list\", \"watch\"]},
+        {apiGroups: [\"apps\", \"extensions\"], resources: [\"deployments\"], verbs: [\"get\", \"list\", \"watch\"]},
+        {apiGroups: [\"coordination.k8s.io\"], resources: [\"leases\"], verbs: [\"create\", \"delete\", \"get\", \"list\", \"patch\", \"update\", \"watch\"]}])
+    and (([.[] | select(.kind == \"RoleBinding\" and .metadata.name == \"openshift-gitops-operator-applicationset-grant\" and .metadata.namespace == \"argocd\")][0])
+      | .roleRef == {apiGroup: \"rbac.authorization.k8s.io\", kind: \"Role\", name: \"openshift-gitops-operator-applicationset-grant\"}
+        and .subjects == [{kind: \"ServiceAccount\", name: \"openshift-gitops-operator-controller-manager\", namespace: \"gitops-operator\"}])' '$T/scoped-built.json'"
+check "scoped cluster-scoped ApplicationSet pair is the operator's cluster rule set, bound to the controller ServiceAccount" \
+  bash -c "jq -e '
+    ([.[] | select(.kind == \"ClusterRole\" and .metadata.name == \"gitops-argocd-argocd-applicationset-controller\")][0].rules
+      == [
+        {apiGroups: [\"argoproj.io\"], resources: [\"applications\", \"applicationsets\", \"applicationsets/finalizers\"], verbs: [\"create\", \"delete\", \"get\", \"list\", \"patch\", \"update\", \"watch\"]},
+        {apiGroups: [\"argoproj.io\"], resources: [\"appprojects\"], verbs: [\"get\", \"list\", \"watch\"]},
+        {apiGroups: [\"argoproj.io\"], resources: [\"applicationsets/status\"], verbs: [\"get\", \"patch\", \"update\"]},
+        {apiGroups: [\"\"], resources: [\"events\"], verbs: [\"create\", \"get\", \"list\", \"patch\", \"watch\"]},
+        {apiGroups: [\"\"], resources: [\"secrets\", \"configmaps\"], verbs: [\"get\", \"list\", \"watch\"]},
+        {apiGroups: [\"coordination.k8s.io\"], resources: [\"leases\"], verbs: [\"create\"]},
+        {apiGroups: [\"coordination.k8s.io\"], resources: [\"leases\"], resourceNames: [\"58ac56fa.applicationsets.argoproj.io\"], verbs: [\"get\", \"update\", \"create\"]}])
+    and (([.[] | select(.kind == \"ClusterRoleBinding\" and .metadata.name == \"gitops-argocd-argocd-applicationset-controller\")][0])
+      | .roleRef == {apiGroup: \"rbac.authorization.k8s.io\", kind: \"ClusterRole\", name: \"gitops-argocd-argocd-applicationset-controller\"}
+        and .subjects == [{kind: \"ServiceAccount\", name: \"gitops-applicationset-controller\", namespace: \"argocd\"}])' '$T/scoped-built.json'"
 check "scoped bundle still declares no Secret" \
   bash -c "jq -e 'all(.[]; .kind != \"Secret\")' '$T/scoped-built.json'"
 check "MC and region both carry exactly one ingress-only default-deny NetworkPolicy (no Egress isolation, no allow rules)" \

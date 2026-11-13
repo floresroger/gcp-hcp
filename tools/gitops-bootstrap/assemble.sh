@@ -264,6 +264,10 @@ expected_ids="$(
       printf 'ClusterRoleBinding/-/%s-argocd-server\n' "$INSTANCE_NAME"
       printf 'Role/%s/openshift-gitops-operator-namespaced-bind\n' "$INSTANCE_NAMESPACE"
       printf 'RoleBinding/%s/openshift-gitops-operator-namespaced-bind\n' "$INSTANCE_NAMESPACE"
+      printf 'Role/%s/openshift-gitops-operator-applicationset-grant\n' "$INSTANCE_NAMESPACE"
+      printf 'RoleBinding/%s/openshift-gitops-operator-applicationset-grant\n' "$INSTANCE_NAMESPACE"
+      printf 'ClusterRole/-/%s-%s-argocd-applicationset-controller\n' "$INSTANCE_NAME" "$INSTANCE_NAMESPACE"
+      printf 'ClusterRoleBinding/-/%s-%s-argocd-applicationset-controller\n' "$INSTANCE_NAME" "$INSTANCE_NAMESPACE"
     fi
   } | LC_ALL=C sort
 )"
@@ -340,6 +344,48 @@ if [[ "$SCOPED_RBAC" == "true" ]]; then
       and $rbs[0].roleRef == {apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "openshift-gitops-operator-namespaced-bind"}
       and $rbs[0].subjects == [{kind: "ServiceAccount", name: $sa, namespace: $opns}]' <<<"$PREVIEW_JSON" >/dev/null \
     || die "the namespaced bind Role/RoleBinding is not the reviewed bind-on-roles grant"
+
+  # The ApplicationSet controller RBAC the operator creates outside the two
+  # role switches. The namespaced grant is what lets the operator's own Role
+  # create/update pass the escalation check; the cluster-scoped pair is declared
+  # so the operator's Get matches and it creates nothing.
+  jq -e --arg ns "$INSTANCE_NAMESPACE" --arg sa "$SERVICE_ACCOUNT" --arg opns "$NAMESPACE" '
+    [ .[] | select(.kind == "Role" and .metadata.name == "openshift-gitops-operator-applicationset-grant") ] as $g
+    | [ .[] | select(.kind == "RoleBinding" and .metadata.name == "openshift-gitops-operator-applicationset-grant") ] as $gb
+    | ($g | length) == 1 and ($gb | length) == 1
+      and $g[0].metadata.namespace == $ns
+      and $g[0].rules == [
+        {apiGroups: ["argoproj.io"], resources: ["applications", "applicationsets", "applicationsets/finalizers"], verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]},
+        {apiGroups: ["argoproj.io"], resources: ["applicationsets/status"], verbs: ["get", "patch", "update"]},
+        {apiGroups: ["argoproj.io"], resources: ["appprojects"], verbs: ["get", "list", "watch"]},
+        {apiGroups: [""], resources: ["events"], verbs: ["create", "get", "list", "patch", "watch"]},
+        {apiGroups: [""], resources: ["configmaps"], verbs: ["create", "update", "delete", "get", "list", "patch", "watch"]},
+        {apiGroups: [""], resources: ["secrets"], verbs: ["get", "list", "watch"]},
+        {apiGroups: ["apps", "extensions"], resources: ["deployments"], verbs: ["get", "list", "watch"]},
+        {apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]}
+      ]
+      and $gb[0].metadata.namespace == $ns
+      and $gb[0].roleRef == {apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: "openshift-gitops-operator-applicationset-grant"}
+      and $gb[0].subjects == [{kind: "ServiceAccount", name: $sa, namespace: $opns}]' <<<"$PREVIEW_JSON" >/dev/null \
+    || die "the ApplicationSet operator grant is not the reviewed namespaced rule set"
+
+  appset_cluster="$(printf '%s-%s-argocd-applicationset-controller' "$INSTANCE_NAME" "$INSTANCE_NAMESPACE")"
+  jq -e --arg n "$appset_cluster" --arg sa "$INSTANCE_NAME-applicationset-controller" --arg ns "$INSTANCE_NAMESPACE" '
+    [ .[] | select(.kind == "ClusterRole" and .metadata.name == $n) ] as $cr
+    | [ .[] | select(.kind == "ClusterRoleBinding" and .metadata.name == $n) ] as $crb
+    | ($cr | length) == 1 and ($crb | length) == 1
+      and $cr[0].rules == [
+        {apiGroups: ["argoproj.io"], resources: ["applications", "applicationsets", "applicationsets/finalizers"], verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]},
+        {apiGroups: ["argoproj.io"], resources: ["appprojects"], verbs: ["get", "list", "watch"]},
+        {apiGroups: ["argoproj.io"], resources: ["applicationsets/status"], verbs: ["get", "patch", "update"]},
+        {apiGroups: [""], resources: ["events"], verbs: ["create", "get", "list", "patch", "watch"]},
+        {apiGroups: [""], resources: ["secrets", "configmaps"], verbs: ["get", "list", "watch"]},
+        {apiGroups: ["coordination.k8s.io"], resources: ["leases"], verbs: ["create"]},
+        {apiGroups: ["coordination.k8s.io"], resources: ["leases"], resourceNames: ["58ac56fa.applicationsets.argoproj.io"], verbs: ["get", "update", "create"]}
+      ]
+      and $crb[0].roleRef == {apiGroup: "rbac.authorization.k8s.io", kind: "ClusterRole", name: $n}
+      and $crb[0].subjects == [{kind: "ServiceAccount", name: $sa, namespace: $ns}]' <<<"$PREVIEW_JSON" >/dev/null \
+    || die "the cluster-scoped ApplicationSet controller pair is not the reviewed operator rule set"
 
   jq -e --arg c "$CONTROLLER_CLUSTER_ROLE" --arg s "$SERVER_CLUSTER_ROLE" '
     [ .[] | select(.kind == "ClusterRole" and .metadata.name == "openshift-gitops-operator-controller-manager") ] as $cr
