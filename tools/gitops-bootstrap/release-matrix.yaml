@@ -8,7 +8,8 @@
 # before relying on it; do not hand-edit digests.
 #
 # This file is NOT a support or certification statement. `support.approval`
-# stays `pending` until GitOps engineering/QE supplies the GKE scope (B1b).
+# stays `pending`. No vendor GKE support statement exists for 1.22; the vendor
+# scope is deferred to 1.23 and tracked as GCP-1444 (split from GCP-1286 AC1).
 # Installation/packaging is accepted for this bounded validation by a named
 # GitOps engineer (B2) and the trust decisions are recorded (B3); that acceptance
 # is scoped to validation and is not a support or certification claim. B4 is
@@ -109,6 +110,8 @@ spec:
   support:
     approval: pending
     blockedBy: [B1b]
+    deferredTo: GCP-1444
+    position: "No vendor-published GKE support or certification statement exists for 1.22.2-7. GitOps engineering states 1.22.2-7 is viable for HCP's own bounded xKS validation and that certification and the support model target 1.23. This run claims no support, SLA, Tech Preview tier, patch floor or escalation commitment."
     guidance:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
@@ -133,6 +136,13 @@ spec:
           - gcp-hcp-stg-global  # us-west1
         source: "gcloud container clusters list, 2026-11-11; all six clusters identical"
       architectures: unapproved
+      validationBaseline:
+        # What the 2026-11-13 bounded run actually tested. The observedBaseline
+        # below is what the target environments run; no 1.35.8 parity is claimed.
+        version: "1.36.4-gke.2377000"
+        autopilot: true
+        architecture: linux/amd64
+        observedOn: "2026-11-13, disposable pair rfl1286m1111, us-central1"
       techPreview: "Source Hydrator and GitOps Promoter are Technology Preview; both are out of scope here."
     note: "No GKE support, SLA or Tech Preview tier for the installation as a whole is claimed."
   routeFix:
