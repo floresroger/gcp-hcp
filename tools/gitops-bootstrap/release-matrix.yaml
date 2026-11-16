@@ -70,7 +70,20 @@ spec:
     limits:
       - "Index manifests passed standalone verification; platform child manifests and their layers were not independently fetched/verified."
       - "Release-key-3 Sigstore signatures now verify for the bundle and the four required images (4 signatures each, 6 for redis), all binding the approved digest. Whether key 3 is required for this deployment is still a Product Security policy question (B3)."
-      - "No chart signature exists: the charts are local packaging."
+      - "No chart signature exists: the charts are local packaging under the exception recorded in chartVerification."
+    chartVerification:
+      method: local_chart_exception
+      signature: "none; local packaging has no vendor chart signature"
+      approvedBy: "Anand Singh (OpenShift GitOps engineering), Slack reply 2026-11-13: \"Yes, sounds good to me.\""
+      approvalScope: "Pre-certification validation on GKE only."
+      rationale: "No vendor chart for 1.22.2 carries this deployment's 8-CRD set. The republished 1.22.2 vendor chart has 27 CRDs; this bundle trims to the 8 it owns, and that set was accepted."
+      covers: "The chart checksums recorded in installation.charts."
+      notCovered: "A positive vendor signature check. Chart bytes rest on repository review and the pinned release inputs, not on a vendor signature."
+    policyDecision:
+      decided: "2026-11-16"
+      bar: "Release key 2 and release key 3 verified for the bundle and the four required images; required artifacts digest-pinned; unsigned local charts under the recorded exception."
+      productSecurity: "Confirmation sought through OCPSTRAT-3214. No Product Security sign-off is claimed; this is an internal HCP record."
+      effect: "B3 is recorded as an internal bar. It does not create a support or certification statement."
   platforms:
     advertised: [linux/amd64, linux/arm64/v8, linux/ppc64le, linux/s390x]
     certified: []
@@ -96,6 +109,12 @@ spec:
       - "ArgoCD CRD is v1beta1-only with no conversion webhook; ENABLE_CONVERSION_WEBHOOK=false."
       - "Manager resources are an untuned local budget, not the CSV's resources: {}."
       - "Scoped operator identity (B4), off by default in the chart and on in the GKE bundles: spec.defaultClusterScopedRoleDisabled=true, CONTROLLER_CLUSTER_ROLE and SERVER_CLUSTER_ROLE set to bundle-owned ClusterRoles, and the manager ClusterRole drops unqualified bind and escalate in favour of one bind limited by resourceNames to those two roles. The vendor rule set stays the chart default and the rule-for-rule baseline."
+    integrationReview:
+      reviewedBy: "Roger Flores Jr"
+      reviewedOn: "2026-11-16"
+      scope: "Matrix pins match the bundle images; 8 CRDs as declared; the argocds CRD is v1beta1-only with no conversion; conversion webhook false; registry auth through the ESO ExternalSecret path with no credential in the rendered bundles."
+      independent: false
+      note: "Team-owned integration review for this validation. Not a vendor review and not a second-party security review."
     guidance:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
