@@ -3,7 +3,7 @@
 # Machine-readable record of the release selected for bounded validation. The
 # digests below were read and signature-checked during the GCP-1286 review; the
 # supporting evidence (manifests, detached signatures, key, logs) is retained on
-# the gcp-hcp-infra branch `gcp-1286/t3-release-validation` under
+# the gcp-hcp-infra branch `gcp-1286/runtime-private` under
 # `docs/gcp-1286-evidence/`. Refresh that evidence against registry.redhat.io
 # before relying on it; do not hand-edit digests.
 #
@@ -32,6 +32,20 @@ spec:
   release: "7"
   operator: openshift-gitops-operator
   csv: openshift-gitops-operator.v1.22.2
+  operandVersions:
+    # Listed by the engineering component matrix for 1.22.2. These are not
+    # runtime observations: no Argo CD binary version was read from the running
+    # components on 2026-11-13, and none is claimed.
+    source: "GitOps Component Matrix rev 443, 2026-11-10"
+    argocd: "3.5.5"
+    dex: "2.45.1"
+    argocdOperator: "0.20"
+    gitopsOperator: "1.22.2"
+    runtimeBinaryIdentity: not observed
+  toolVersions:
+    source: "GitOps Component Matrix rev 443, 2026-11-10"
+    helm: "4.2.4"
+    kustomize: "5.8.2"
   channels:
     declared: [latest, gitops-1.22]
     default: latest
@@ -119,7 +133,7 @@ spec:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
       states: "Local packaging is acceptable for validation; no official vendor chart exists for 1.22.x and none will be produced before 1.23; the approach matches the GITOPS-10648 xKS path (strip v1alpha1 and spec.conversion, ENABLE_CONVERSION_WEBHOOK=false, Helm install)."
-      verified: "Packaged argocds CRD has no spec.conversion key and a single v1beta1 served/storage version (run-step2-tests.sh:134,333; run-release-verification-tests.sh:395)."
+      verified: "Packaged argocds CRD has no spec.conversion key and a single v1beta1 served/storage version (run-step2-tests.sh:136-140; run-release-verification-tests.sh:404-409)."
       followUp:
         received: "2026-11-13"
         source: "Anand Singh, Slack reply relayed by Roger (chart author)"
@@ -130,7 +144,7 @@ spec:
     approval: pending
     blockedBy: [B1b]
     deferredTo: GCP-1444
-    position: "No vendor-published GKE support or certification statement exists for 1.22.2-7. GitOps engineering states 1.22.2-7 is viable for HCP's own bounded xKS validation and that certification and the support model target 1.23. This run claims no support, SLA, Tech Preview tier, patch floor or escalation commitment."
+    position: "No vendor-published GKE support or certification statement exists for 1.22.2-7. The GitOps engineering channel's assistant replied on 2026-11-11 (self-flagged for accuracy, not a human decision record) that 1.22.2-7 is viable for HCP's own bounded xKS validation and that certification and the support model target 1.23. This run claims no support, SLA, Tech Preview tier, patch floor or escalation commitment."
     guidance:
       received: "2026-11-11"
       source: "GitOps engineering channel, their AI assistant (self-labelled for accuracy checking)"
@@ -157,12 +171,12 @@ spec:
       architectures: unapproved
       validationBaseline:
         # What the 2026-11-13 bounded run actually tested. The observedBaseline
-        # below is what the target environments run; no 1.35.8 parity is claimed.
+        # above is what the target environments run; no 1.35.8 parity is claimed.
         version: "1.36.4-gke.2377000"
         autopilot: true
         architecture: linux/amd64
         observedOn: "2026-11-13, disposable pair rfl1286m1111, us-central1"
-      techPreview: "Source Hydrator and GitOps Promoter are Technology Preview; both are out of scope here."
+      techPreview: "Source Hydrator and GitOps Promoter are Technology Preview; both are out of scope here. Source: 1.22 release notes, read 2026-11-10 (see GCP-1286_PLAN.md)."
     note: "No GKE support, SLA or Tech Preview tier for the installation as a whole is claimed."
   routeFix:
     ticket: GITOPS-11466
